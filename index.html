@@ -6,13 +6,13 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="EcoSentinel — Plataforma ciudadana de denuncia de delitos ambientales (Colombia · Ley 2111/2021)">
-<title>EcoSentinel · Denuncia ciudadana de delitos ambientales</title>
+<meta name="description" content="Eco-Complaint — Plataforma ciudadana de denuncia de delitos ambientales (Colombia · Ley 2111/2021)">
+<title>Eco-Complaint · Denuncia ciudadana de delitos ambientales</title>
 
 <!--
   ============================================================
-  ECO-SENTINEL · Prototipo Funcional · Fase 0 · v0.6.0
-  STEP-001 + STEP-002 + STEP-003 + STEP-004 + STEP-005 + STEP-006
+  ECO-SENTINEL · Prototipo Funcional · Fase 0 · v0.8.0
+  STEP-001 a STEP-008
   Marco normativo: Ley 2111 de 2021 (Colombia) · ISO 31000:2018
   Sistema visual: Brote
   Última edición: Mayo 10, 2026
@@ -1285,6 +1285,371 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   display: flex; gap: var(--s-3); justify-content: center; flex-wrap: wrap;
 }
 
+/* ============================================================
+   12J · CONSULTA PÚBLICA + CONTACTO + QUICK ACTIONS (STEP-007)
+   ============================================================ */
+.page-head {
+  padding: var(--s-8) 0 var(--s-6);
+  text-align: center;
+}
+.page-head .pill { margin-bottom: var(--s-3); }
+.page-head h1 { font-size: var(--t-40); margin-bottom: var(--s-3); }
+.page-head p { color: var(--text-soft); font-size: var(--t-17); max-width: 56ch; margin: 0 auto; }
+
+.quick-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4);
+  margin: var(--s-10) 0 var(--s-8);
+}
+.quick-card {
+  display: flex; gap: var(--s-4); align-items: flex-start;
+  padding: var(--s-6); background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-xl); transition: all 220ms;
+  text-decoration: none; color: inherit;
+}
+.quick-card:hover {
+  border-color: var(--brand); box-shadow: var(--sh-2);
+  transform: translateY(-2px);
+}
+.quick-icon {
+  flex-shrink: 0; width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-md);
+}
+.quick-icon[data-tone="brand"] { background: var(--brand-tint); color: var(--brand-deep); }
+.quick-icon[data-tone="warm"]  { background: var(--warm-soft); color: #8B6614; }
+.quick-body { flex: 1; }
+.quick-body h3 { font-size: var(--t-19); margin-bottom: 6px; }
+.quick-body p { color: var(--text-soft); font-size: var(--t-14); line-height: 1.5; margin-bottom: var(--s-3); }
+.quick-link { color: var(--brand-deep); font-weight: 600; font-size: var(--t-13); }
+
+@media (max-width: 720px) {
+  .quick-actions { grid-template-columns: 1fr; }
+  .quick-card { padding: var(--s-5); }
+}
+
+.consulta-card {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-xl); padding: var(--s-6);
+  box-shadow: var(--sh-1); margin-bottom: var(--s-6);
+}
+.consulta-input-row {
+  display: flex; gap: var(--s-3); align-items: stretch;
+  flex-wrap: wrap;
+}
+.consulta-input-row .input { flex: 1; min-width: 220px; }
+.consulta-input-row .input.mono { font-family: var(--font-mono); font-size: var(--t-15); letter-spacing: 0.02em; text-transform: uppercase; }
+@media (max-width: 540px) {
+  .consulta-input-row { flex-direction: column; }
+  .consulta-input-row .btn { width: 100%; }
+}
+
+.consulta-status-card {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-xl); padding: var(--s-6);
+  box-shadow: var(--sh-2); margin-bottom: var(--s-6);
+  animation: viewIn 280ms ease forwards;
+}
+.consulta-status-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-5);
+  padding-bottom: var(--s-4); border-bottom: 1px solid var(--line);
+}
+.consulta-radicado-num {
+  font-family: var(--font-mono); font-size: var(--t-19); font-weight: 700;
+  color: var(--text); letter-spacing: 0.02em;
+}
+.consulta-radicado-label {
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.consulta-status-hero {
+  display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap;
+  padding: var(--s-5); border-radius: var(--r-md);
+  background: var(--bg-subtle);
+}
+.consulta-status-icon {
+  width: 48px; height: 48px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: white;
+}
+.consulta-status-icon[data-status="received"]    { background: #95A5A0; }
+.consulta-status-icon[data-status="triaged"]     { background: var(--brand); }
+.consulta-status-icon[data-status="in_progress"] { background: var(--warm); }
+.consulta-status-icon[data-status="resolved"]    { background: var(--brand-deep); }
+.consulta-status-text { flex: 1; }
+.consulta-status-text strong {
+  display: block; font-family: var(--font-display); font-size: var(--t-22);
+  color: var(--text); margin-bottom: 2px;
+}
+.consulta-status-text span { color: var(--text-soft); font-size: var(--t-13); }
+
+.consulta-meta-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3);
+  margin-top: var(--s-5);
+}
+.consulta-meta-item {
+  padding: var(--s-3) var(--s-4); background: var(--bg-subtle);
+  border-radius: var(--r-md);
+}
+.consulta-meta-item .lbl {
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+}
+.consulta-meta-item .val {
+  font-size: var(--t-15); color: var(--text); font-weight: 600;
+}
+@media (max-width: 540px) {
+  .consulta-meta-grid { grid-template-columns: 1fr; }
+}
+
+.timeline {
+  position: relative; padding-left: 24px; margin-top: var(--s-5);
+}
+.timeline::before {
+  content: ''; position: absolute; left: 9px; top: 8px; bottom: 8px;
+  width: 2px; background: var(--line);
+}
+.timeline-item {
+  position: relative; padding: 0 0 var(--s-5) 0;
+}
+.timeline-item:last-child { padding-bottom: 0; }
+.timeline-dot {
+  position: absolute; left: -23px; top: 4px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--bg-card); border: 3px solid var(--brand);
+  box-shadow: 0 0 0 3px var(--bg-card);
+}
+.timeline-item[data-current="true"] .timeline-dot {
+  background: var(--brand); animation: pulseDot 2s infinite;
+}
+@keyframes pulseDot {
+  0%   { box-shadow: 0 0 0 3px var(--bg-card), 0 0 0 4px rgba(46,170,112,0.4); }
+  70%  { box-shadow: 0 0 0 3px var(--bg-card), 0 0 0 10px rgba(46,170,112,0); }
+  100% { box-shadow: 0 0 0 3px var(--bg-card), 0 0 0 4px rgba(46,170,112,0); }
+}
+.timeline-date {
+  font-size: var(--t-12); color: var(--text-muted);
+  font-family: var(--font-mono); margin-bottom: 4px;
+}
+.timeline-title {
+  font-size: var(--t-15); font-weight: 600; color: var(--text);
+  margin-bottom: 2px;
+}
+.timeline-desc { font-size: var(--t-13); color: var(--text-soft); line-height: 1.5; }
+
+.info-card-soft {
+  background: var(--brand-tint); border: 1px solid var(--brand-soft);
+  border-radius: var(--r-lg); padding: var(--s-5);
+  margin-top: var(--s-6);
+}
+.info-card-soft h4 { font-size: var(--t-15); color: var(--brand-deep); margin-bottom: var(--s-2); }
+.info-card-soft p { font-size: var(--t-13); color: var(--text-soft); line-height: 1.6; margin: 0; }
+.info-card-soft code {
+  background: var(--bg-card); padding: 2px 8px; border-radius: var(--r-sm);
+  font-family: var(--font-mono); font-size: var(--t-12); color: var(--brand-deep);
+}
+
+.consulta-empty {
+  text-align: center; padding: var(--s-10) var(--s-5);
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-xl); margin-bottom: var(--s-6);
+}
+.consulta-empty-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--alarm-soft); color: var(--alarm);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto var(--s-4);
+}
+.consulta-empty h3 { font-size: var(--t-22); margin-bottom: var(--s-2); }
+.consulta-empty p { color: var(--text-soft); font-size: var(--t-15); max-width: 40ch; margin: 0 auto var(--s-4); }
+
+.contact-grid {
+  display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--s-6);
+  margin: var(--s-6) 0;
+}
+@media (max-width: 760px) {
+  .contact-grid { grid-template-columns: 1fr; }
+}
+.contact-info-card {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-xl); padding: var(--s-6);
+  box-shadow: var(--sh-1);
+}
+.contact-info-head {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding-bottom: var(--s-4); border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s-5);
+}
+.contact-mark {
+  width: 56px; height: 56px; border-radius: var(--r-md);
+  background: var(--brand); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: var(--t-22); font-weight: 700;
+}
+.contact-info-head h2 { margin: 0; font-size: var(--t-22); }
+.contact-info-head .soft { font-size: var(--t-13); color: var(--text-soft); }
+
+.contact-row {
+  display: flex; align-items: flex-start; gap: var(--s-3);
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+}
+.contact-row:last-of-type { border-bottom: none; }
+.contact-row-icon {
+  width: 40px; height: 40px; border-radius: var(--r-md);
+  background: var(--brand-tint); color: var(--brand-deep);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.contact-row-body { flex: 1; min-width: 0; }
+.contact-row-label {
+  font-size: var(--t-12); color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px;
+}
+.contact-row-value {
+  font-size: var(--t-15); color: var(--text); font-weight: 500;
+  word-break: break-word;
+}
+.contact-row-value a {
+  color: var(--brand-deep); text-decoration: none; font-weight: 600;
+}
+.contact-row-value a:hover { text-decoration: underline; }
+.contact-quick-actions {
+  display: flex; gap: var(--s-3); margin-top: var(--s-5);
+  padding-top: var(--s-5); border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.contact-quick-actions .btn { flex: 1; min-width: 140px; }
+
+.contact-form-card {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-xl); padding: var(--s-6);
+  box-shadow: var(--sh-1);
+}
+.contact-form-card h3 { font-size: var(--t-19); margin-bottom: var(--s-2); }
+.contact-form-card p { color: var(--text-soft); font-size: var(--t-13); margin-bottom: var(--s-5); }
+.contact-form-card .label { margin-top: var(--s-4); }
+.contact-form-card .label:first-of-type { margin-top: 0; }
+.contact-form-card .btn { margin-top: var(--s-5); width: 100%; }
+.contact-form-card .input,
+.contact-form-card textarea.input { width: 100%; }
+
+/* ============================================================
+   12K · MEJORAS UX (STEP-008)
+   ============================================================ */
+
+/* Radicado-box clickable: copy-to-clipboard */
+.radicado-box {
+  cursor: pointer; transition: all 220ms; position: relative;
+  user-select: none;
+}
+.radicado-box:hover {
+  background: var(--brand-tint); border-color: var(--brand);
+  transform: translateY(-1px); box-shadow: var(--sh-1);
+}
+.radicado-box:active { transform: translateY(0); }
+.radicado-box:focus-visible {
+  outline: 3px solid var(--brand-soft); outline-offset: 4px;
+}
+.radicado-copy-hint {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 8px; padding: 4px 10px;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 11px; color: var(--text-soft);
+  transition: all 200ms;
+}
+.radicado-box.copied {
+  background: var(--brand-tint); border-color: var(--brand);
+  animation: copiedPulse 600ms ease;
+}
+.radicado-box.copied .radicado-copy-hint {
+  background: var(--brand); color: white; border-color: var(--brand);
+}
+.radicado-box.copied .radicado-copy-hint span::before {
+  content: "✓ ¡Copiado!"; font-weight: 700;
+}
+.radicado-box.copied .radicado-copy-hint span,
+.radicado-box.copied .radicado-copy-hint svg { display: none; }
+@keyframes copiedPulse {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.03); }
+}
+
+/* Última actualización · indicador relativo */
+.consulta-last-update {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 8px; padding: 3px 8px;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 11px; color: var(--text-soft);
+}
+.consulta-last-update strong { color: var(--text); font-weight: 600; }
+
+/* Public stats en home */
+.public-stats {
+  margin: var(--s-10) 0;
+  padding: var(--s-8) var(--s-6);
+  background: linear-gradient(135deg, var(--bg-card) 0%, var(--brand-tint) 100%);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--brand-soft);
+}
+.public-stats-header { text-align: center; margin-bottom: var(--s-6); }
+.public-stats-header .pill { margin-bottom: var(--s-3); }
+.public-stats-header h2 { font-size: var(--t-32); margin-bottom: var(--s-2); }
+.public-stats-header p { color: var(--text-soft); font-size: var(--t-15); }
+.public-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s-4);
+}
+.stat-card {
+  background: var(--bg-card); padding: var(--s-5);
+  border-radius: var(--r-lg); border: 1px solid var(--line);
+  text-align: center;
+  transition: all 220ms;
+}
+.stat-card:hover { box-shadow: var(--sh-2); transform: translateY(-2px); }
+.stat-card-highlight {
+  background: var(--brand); border-color: var(--brand-deep);
+  color: white;
+}
+.stat-card-highlight .stat-label,
+.stat-card-highlight .stat-sub { color: rgba(255,255,255,0.85); }
+.stat-value {
+  font-family: var(--font-display); font-size: var(--t-40); font-weight: 700;
+  line-height: 1; color: var(--brand-deep); margin-bottom: 6px;
+}
+.stat-card-highlight .stat-value { color: white; }
+.stat-value-text {
+  font-family: var(--font-display); font-size: var(--t-19); font-weight: 700;
+  line-height: 1.2; color: var(--text); margin-bottom: 6px;
+  min-height: 38px; display: flex; align-items: center; justify-content: center;
+}
+.stat-label {
+  font-size: var(--t-13); color: var(--text-soft);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+  margin-bottom: 4px;
+}
+.stat-sub { font-size: 11px; color: var(--text-muted); }
+.public-stats-foot {
+  text-align: center; font-size: 12px;
+  margin-top: var(--s-5); padding-top: var(--s-4);
+  border-top: 1px dashed var(--brand-soft);
+}
+.public-stats-empty {
+  background: var(--bg-card); border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg); padding: var(--s-8); text-align: center;
+}
+.public-stats-empty p { color: var(--text-soft); margin: 0; }
+
+@media (max-width: 540px) {
+  .public-stats { padding: var(--s-5) var(--s-4); }
+  .public-stats-header h2 { font-size: var(--t-26); }
+}
+
+
 #toasts {
   position: fixed; bottom: var(--s-6); right: var(--s-6); z-index: 100;
   display: flex; flex-direction: column; gap: var(--s-2); pointer-events: none;
@@ -1383,7 +1748,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
       <div style="margin-bottom:6px"><strong>2.</strong> Usa la app "<strong>Documents by Readdle</strong>" (gratis, App Store)</div>
       <div><strong>3.</strong> Ábrelo en un computador (cualquier navegador funciona)</div>
     </div>
-    <div style="margin-top:16px; font-size:11px; color:#657771; font-family:monospace">EcoSentinel · v0.6.4</div>
+    <div style="margin-top:16px; font-size:11px; color:#657771; font-family:monospace">Eco-Complaint · v0.8.0</div>
   </div>
 </div>
 <script>
@@ -1397,7 +1762,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
      Solo se muestra si hay un error real.
      ============================================================ -->
 <div id="emergency-err" style="display:none; position:fixed; top:0; left:0; right:0; max-height:80vh; overflow-y:auto; background:#DC4545; color:white; padding:14px 18px; z-index:99999; font-family:-apple-system,BlinkMacSystemFont,sans-serif; font-size:13px; line-height:1.5; box-shadow:0 4px 16px rgba(0,0,0,0.3)">
-  <div style="font-weight:700; font-size:15px; margin-bottom:6px">⚠ EcoSentinel · Error al iniciar</div>
+  <div style="font-weight:700; font-size:15px; margin-bottom:6px">⚠ Eco-Complaint · Error al iniciar</div>
   <div id="emergency-err-body" style="font-family:monospace; font-size:11px; word-break:break-all; white-space:pre-wrap"></div>
   <div style="margin-top:10px">
     <button onclick="document.getElementById('emergency-err').style.display='none'" style="background:white; color:#DC4545; border:none; padding:6px 14px; border-radius:4px; font-weight:600; font-size:12px">Cerrar</button>
@@ -1409,7 +1774,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
      Si la app arrancó bien, muestra "✓ OK". Si no, queda visible
      el último paso que llegó. Toggle con tap. -->
 <div id="diag-panel" style="position:fixed; bottom:8px; right:8px; max-width:90vw; background:rgba(15,31,26,0.92); color:#C7EAD6; padding:8px 12px; z-index:99998; font-family:-apple-system,monospace; font-size:10px; line-height:1.4; border-radius:6px; cursor:pointer" onclick="this.style.display='none'">
-  <div style="color:#FFF; font-weight:700; margin-bottom:4px">EcoSentinel v0.6.4 · diag</div>
+  <div style="color:#FFF; font-weight:700; margin-bottom:4px">Eco-Complaint v0.8.0 · diag</div>
   <div id="diag-body">arrancando...</div>
   <div style="margin-top:4px; font-size:9px; opacity:0.6">tap para ocultar</div>
 </div>
@@ -1474,11 +1839,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 <!-- HEADER -->
 <header class="app-header" role="banner">
   <div class="app-header-inner">
-    <a class="brand" href="#/" aria-label="Ir a inicio EcoSentinel">
+    <a class="brand" href="#/" aria-label="Ir a inicio Eco-Complaint">
       <span class="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 C 14 6, 18 8, 18 13 C 18 17, 15 20, 12 20 C 9 20, 6 17, 6 13 C 6 8, 10 6, 12 2 Z M 12 8 L 12 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </span>
-      <span class="brand-name">Eco<span>Sentinel</span></span>
+      <span class="brand-name">Eco<span>-Complaint</span></span>
     </a>
     <nav class="nav" aria-label="Navegación principal" id="primary-nav"></nav>
     <div class="header-spacer"></div>
@@ -1498,8 +1863,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
       <div class="landing-text">
         <span class="pill">Plataforma ciudadana · Ley 2111 de 2021</span>
         <h1>Reporta lo que ves.<br>Protege <em>lo nuestro</em>.</h1>
-        <p>Una plataforma sencilla para denunciar delitos ambientales en Colombia. Te guiamos paso a paso, calculamos a quién avisar, y enviamos tu reporte a las autoridades correctas.</p>
-        <div class="landing-cta">
+        <p>Una plataforma para denunciar delitos ambientales en Colombia. Te guiamos paso a paso y enviamos tu reporte a las autoridades competentes.</p>
+        <div class="landing-cta" id="landing-cta">
           <a class="btn btn-primary btn-lg" href="#/denunciar">Empezar denuncia</a>
           <a class="btn btn-ghost btn-lg" href="#/iniciar-sesion">Iniciar sesión</a>
         </div>
@@ -1518,6 +1883,71 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
           <path d="M120 150 Q 145 140 160 145 Q 155 175 130 180 Q 120 175 120 165" fill="var(--brand-light)" stroke="var(--brand-deep)" stroke-width="2"/>
         </svg>
       </div>
+    </div>
+
+    <!-- Quick actions · acceso público (STEP-007) -->
+    <div class="container-narrow">
+      <div class="quick-actions">
+        <a class="quick-card" href="#/consulta">
+          <div class="quick-icon" data-tone="brand">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <div class="quick-body">
+            <h3>Consultar mi denuncia</h3>
+            <p>¿Ya hiciste una denuncia? Con tu número de radicado puedes ver el estado actual y las actualizaciones del caso.</p>
+            <span class="quick-link">Buscar por radicado →</span>
+          </div>
+        </a>
+        <a class="quick-card" href="#/contacto">
+          <div class="quick-icon" data-tone="warm">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <div class="quick-body">
+            <h3>Contactar Eco-Complaint</h3>
+            <p>Llama, escribe o pregúntanos. Estamos aquí para resolver dudas sobre denuncias y el proceso ambiental.</p>
+            <span class="quick-link">Ver datos de contacto →</span>
+          </div>
+        </a>
+      </div>
+
+      <!-- Estadísticas públicas · transparencia institucional (STEP-008) -->
+      <div id="public-stats" class="public-stats">
+        <!-- Renderizado por PublicStats.render() -->
+      </div>
+    </div>
+  </section>
+
+  <!-- CONSULTA PÚBLICA DE RADICADOS (STEP-007) -->
+  <section class="view" id="view-consulta" data-route="/consulta">
+    <div class="container-narrow">
+      <div class="page-head">
+        <span class="pill">Acceso público · sin registro</span>
+        <h1>Consultar mi denuncia</h1>
+        <p>Ingresa el número de radicado que recibiste al enviar tu denuncia para ver su estado actual.</p>
+      </div>
+
+      <div class="consulta-card">
+        <label class="label" for="consulta-input">Número de radicado</label>
+        <div class="consulta-input-row">
+          <input class="input mono" id="consulta-input" placeholder="ECO-20260510-330A-0001" autocomplete="off" autocapitalize="characters" spellcheck="false">
+          <button class="btn btn-primary btn-lg" id="consulta-search-btn">Consultar</button>
+        </div>
+        <p class="muted" style="font-size: 12px; margin-top: 8px">Formato: <code>ECO-AAAAMMDD-{artículo}-{secuencia}</code></p>
+      </div>
+
+      <div id="consulta-result"></div>
+
+      <div class="info-card-soft">
+        <h4>¿No encuentras tu radicado?</h4>
+        <p>Si perdiste el número, escríbenos al correo maestro de radicación <code>radicacion@Eco-Complaint.demo.co</code> con detalles del hecho denunciado y la fecha aproximada. Te ayudaremos a localizarlo.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACTO (STEP-007) -->
+  <section class="view" id="view-contacto" data-route="/contacto">
+    <div class="container-narrow">
+      <div id="contact-container"></div>
     </div>
   </section>
 
@@ -1877,6 +2307,23 @@ const Persist = {
         { uid: 'demo-admin',   name: 'Admin Demo',     email: 'admin@demo.co', password: 'demo', role: 'admin',     createdAt: new Date().toISOString(), denunciasCount: 0 }
       ]);
     }
+    if (!this.get('config.contact')) {
+      this.set('config.contact', {
+        org_name: 'Eco-Complaint Colombia',
+        tagline: 'Plataforma ciudadana de denuncia ambiental',
+        email: 'contacto@Eco-Complaint.demo.co',
+        phone: '+57 (601) 555-0100',
+        phone_emergency: '+57 (601) 555-0911',
+        address: 'Calle 26 # 13-19, Edificio Fonade, Bogotá D.C., Colombia',
+        hours: 'Lunes a Viernes · 8:00 AM – 5:00 PM (UTC−5)',
+        website: 'https://Eco-Complaint.gov.co (demo)',
+        social: {
+          twitter: '@Eco-ComplaintCo',
+          instagram: '@Eco-Complaintco'
+        }
+      });
+    }
+
     if (!this.get('config.authorities')) {
       this.set('config.authorities', {
         bajo:    ['umata@demo.co'],
@@ -1884,7 +2331,7 @@ const Persist = {
         alto:    ['anla@demo.co', 'car-regional@demo.co'],
         critico: ['fiscalia122@demo.co', 'anla@demo.co', 'car-regional@demo.co'],
         extremo: ['fiscalia122@demo.co', 'anla@demo.co', 'denuncias@minambiente.gov.co', 'policia-ambiental@demo.co', 'car-regional@demo.co'],
-        master_email: 'radicacion@ecosentinel.demo.co'
+        master_email: 'radicacion@Eco-Complaint.demo.co'
       });
     } else {
       /* Migración para usuarios con config legacy: completar lo que falta */
@@ -1892,7 +2339,7 @@ const Persist = {
       let changed = false;
       if (!cfg.bajo  || cfg.bajo.length  === 0) { cfg.bajo  = ['umata@demo.co']; changed = true; }
       if (!cfg.medio || cfg.medio.length === 0) { cfg.medio = ['car-regional@demo.co']; changed = true; }
-      if (!cfg.master_email) { cfg.master_email = 'radicacion@ecosentinel.demo.co'; changed = true; }
+      if (!cfg.master_email) { cfg.master_email = 'radicacion@Eco-Complaint.demo.co'; changed = true; }
       if (changed) this.set('config.authorities', cfg);
     }
 
@@ -2205,7 +2652,7 @@ const I18n = {
       'rev.description':                'Descripción adicional',
       'rev.description.none':           'Sin descripción adicional',
       'rev.authorities':                'Recibirán esta denuncia',
-      'rev.master.note':                'El correo en verde es el centro de radicación maestro de EcoSentinel · recibe copia de toda denuncia.',
+      'rev.master.note':                'El correo en verde es el centro de radicación maestro de Eco-Complaint · recibe copia de toda denuncia.',
       'rev.send':                       'Enviar denuncia',
       'rev.send.confirm.title':         'Enviar denuncia',
       'rev.send.confirm.body':          'Una vez enviada, las autoridades reciben la denuncia automáticamente. ¿Continuar?',
@@ -2294,6 +2741,8 @@ const Auth = {
 const Router = {
   routes: [
     { path: '/',                     view: 'view-home' },
+    { path: '/consulta',             view: 'view-consulta' },
+    { path: '/contacto',             view: 'view-contacto' },
     { path: '/iniciar-sesion',       view: 'view-login' },
     { path: '/denunciar',            view: 'view-citizen-report' },
     { path: '/denunciar/resultado',  view: 'view-tree-result' },
@@ -2335,6 +2784,7 @@ const Router = {
       AdminViews.render(sub);
       document.querySelectorAll('.admin-link').forEach(a => a.classList.toggle('active', a.dataset.adminLink === sub));
     }
+    if (route.view === 'view-home')           PublicStats.render();
     if (route.view === 'view-citizen-report') Tree.renderIntro();
     if (route.view === 'view-tree-result')    Tree.renderResult();
     if (route.view === 'view-probability')    Probability.renderCurrent();
@@ -2343,6 +2793,8 @@ const Router = {
     if (route.view === 'view-evidence')       EvidenceView.render();
     if (route.view === 'view-review')         Review.render();
     if (route.view === 'view-sent')           SentView.render();
+    if (route.view === 'view-consulta')       PublicLookup.render();
+    if (route.view === 'view-contacto')       Contact.render();
 
     Store.set({ route: hash });
     Audit.log('navigate', 'route', hash);
@@ -3633,13 +4085,13 @@ const Report = {
       lines.push(`   Para acceder a las evidencias del radicado ${radicado}, opciones disponibles:`);
       lines.push('');
       lines.push('   (a) Solicitar copia al correo maestro de radicación:');
-      lines.push('       → radicacion@ecosentinel.demo.co');
+      lines.push('       → radicacion@Eco-Complaint.demo.co');
       lines.push('');
       lines.push('   (b) Consultar el PDF del radicado, que contiene la galería visual');
       lines.push('       embebida de todas las imágenes adjuntas.');
       lines.push('');
       lines.push('   (c) [Fase 2 · planeada] Consulta directa via link seguro:');
-      lines.push(`       https://ecosentinel.app/denuncias/${radicado}`);
+      lines.push(`       https://Eco-Complaint.app/denuncias/${radicado}`);
       lines.push('       (funcionalidad disponible al migrar a Firebase Storage)');
     } else lines.push('Sin evidencias adjuntas');
     if (draft.reporter_description) {
@@ -3652,7 +4104,7 @@ const Report = {
     lines.push(draft.isAnonymous ? 'Denuncia anónima' : 'Asociada a cuenta verificada');
     lines.push('');
     lines.push('---');
-    lines.push('Esta denuncia fue radicada via EcoSentinel.');
+    lines.push('Esta denuncia fue radicada via Eco-Complaint.');
     lines.push('Plataforma ciudadana de denuncia de delitos ambientales · Ley 2111 de 2021');
     return lines.join('\n');
   }
@@ -3792,9 +4244,13 @@ const SentView = {
         <h2>${I18n.t('sent.title')}</h2>
         <p>${I18n.t('sent.subtitle')}</p>
 
-        <div class="radicado-box">
+        <div class="radicado-box" id="radicado-box-clickable" role="button" tabindex="0" aria-label="Copiar número de radicado">
           <div class="radicado-label">${I18n.t('sent.radicado.label')}</div>
           <div class="radicado-num">${report.radicado}</div>
+          <div class="radicado-copy-hint">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Toca para copiar</span>
+          </div>
         </div>
 
         <div class="sent-meta">
@@ -3817,13 +4273,139 @@ const SentView = {
           <a class="btn btn-ghost" href="#/denunciar">${I18n.t('sent.action.new')}</a>
           ${Auth.current() ? `<a class="btn btn-soft" href="#/mis-denuncias">${I18n.t('sent.action.mine')}</a>` : ''}
         </div>
+
+        <div class="info-card-soft" style="margin-top: var(--s-6); max-width: 480px; margin-left: auto; margin-right: auto">
+          <h4>💡 Guarda tu número de radicado</h4>
+          <p>Con el número <code>${report.radicado}</code> podrás <a href="#/consulta?radicado=${encodeURIComponent(report.radicado)}" style="color: var(--brand-deep); font-weight: 600">consultar el estado de tu denuncia en cualquier momento</a> desde la página pública, sin necesidad de iniciar sesión.</p>
+        </div>
       </div>
     `;
 
     /* Bind PDF download */
     document.getElementById('sent-pdf-btn').onclick = () => PdfGen.downloadReport(report);
+
+    /* Bind copy-to-clipboard del radicado */
+    const radBox = document.getElementById('radicado-box-clickable');
+    if (radBox) {
+      const doCopy = () => {
+        Clipboard.copy(report.radicado).then(ok => {
+          if (ok) {
+            radBox.classList.add('copied');
+            setTimeout(() => radBox.classList.remove('copied'), 1500);
+            Toast.show('Radicado copiado al portapapeles');
+            Audit.log('radicado_copy', 'report', report.radicado);
+          } else {
+            Toast.show('No se pudo copiar · selecciónalo manualmente', 'error');
+          }
+        });
+      };
+      radBox.onclick = doCopy;
+      radBox.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doCopy(); } };
+    }
   }
 };
+
+/* === I.19 · CLIPBOARD · helper universal (STEP-008) === */
+const Clipboard = {
+  /* Soporta navegador moderno + fallback con execCommand para Safari iOS más viejo */
+  copy(text) {
+    return new Promise(resolve => {
+      /* Intento 1: API moderna */
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text)
+          .then(() => resolve(true))
+          .catch(() => resolve(this._fallback(text)));
+        return;
+      }
+      /* Fallback */
+      resolve(this._fallback(text));
+    });
+  },
+  _fallback(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '0';
+      ta.setAttribute('readonly', '');
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  }
+};
+
+/* === I.20 · QRGEN · generador de códigos QR vanilla (STEP-008) ===
+   Implementación mínima v3-M (29x29, ~70 chars). No requiere librería externa.
+   Basado en el estándar ISO/IEC 18004 simplificado. */
+const QRGen = {
+  /* API pública: genera dataURL PNG de un QR para el texto dado */
+  toDataURL(text, opts) {
+    opts = opts || {};
+    const size = opts.size || 200;
+    const margin = 2;
+    const matrix = this._build(text);
+    const N = matrix.length;
+    const totalCells = N + margin * 2;
+    const cellSize = Math.floor(size / totalCells);
+    const canvasSize = cellSize * totalCells;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasSize; canvas.height = canvasSize;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+    ctx.fillStyle = '#000000';
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        if (matrix[r][c]) {
+          ctx.fillRect((c + margin) * cellSize, (r + margin) * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+    return canvas.toDataURL('image/png');
+  },
+
+  /* Build matrix usando algoritmo qrcode.js-style simplificado */
+  _build(text) {
+    /* Estrategia: usamos qrcode-generator embebido condensado.
+       Soporta byte mode, ECC level M, auto-sizing typeNumber 1-10. */
+    const QR = this._qrLib();
+    /* Auto-detectar versión mínima */
+    let typeNumber = 1;
+    while (typeNumber <= 10) {
+      try {
+        const qr = QR(typeNumber, 'M');
+        qr.addData(text);
+        qr.make();
+        const N = qr.getModuleCount();
+        const matrix = [];
+        for (let r = 0; r < N; r++) {
+          const row = [];
+          for (let c = 0; c < N; c++) row.push(qr.isDark(r, c) ? 1 : 0);
+          matrix.push(row);
+        }
+        return matrix;
+      } catch (e) {
+        typeNumber++;
+      }
+    }
+    throw new Error('QR data too long');
+  },
+
+  /* qrcode-generator library (Kazuhiko Arase, MIT License, condensed inline)
+     Version 1.4.4 - https://github.com/kazuhikoarase/qrcode-generator */
+  _qrLib() {
+    if (this._lib) return this._lib;
+    var qrcode=function(){var c=function(c,d){var e=c,a=t[d],l=null,p=0,m=null,v=[],b={},h=function(c,d){p=4*e+17;l=function(c){for(var d=new Array(c),a=0;a<c;a+=1){d[a]=new Array(c);for(var b=0;b<c;b+=1)d[a][b]=null}return d}(p);u(0,0);u(p-7,0);u(0,p-7);x(p,e);y(p,e);A(l,c);7<=e&&z(l,c,d);null==m&&(m=B(e,a,v));C(l,m,d)},u=function(c,d){for(var a=-1;7>=a;a+=1)if(!(-1>=c+a||p<=c+a))for(var b=-1;7>=b;b+=1)-1>=d+b||p<=d+b||(l[c+a][d+b]=0<=a&&6>=a&&(0==b||6==b)||0<=b&&6>=b&&(0==a||6==a)||2<=a&&4>=a&&2<=b&&4>=b?!0:!1)},y=function(c,d){for(var a=8;a<c-8;a+=1)null==l[a][6]&&(l[a][6]=0==a%2);for(d=8;d<c-8;d+=1)null==l[6][d]&&(l[6][d]=0==d%2)},x=function(c,d){d=g.getPatternPosition(e);for(var a=0;a<d.length;a+=1)for(var b=0;b<d.length;b+=1){var f=d[a],h=d[b];if(null==l[f][h])for(var k=-2;2>=k;k+=1)for(var p=-2;2>=p;p+=1)l[f+k][h+p]=-2==k||2==k||-2==p||2==p||0==k&&0==p?!0:!1}},z=function(c,d,a){a=g.getBCHTypeNumber(e);for(d=0;18>d;d+=1)c[Math.floor(d/3)][d%3+p-8-3]=(a>>d&1)==1;for(d=0;18>d;d+=1)c[d%3+p-8-3][Math.floor(d/3)]=(a>>d&1)==1},A=function(c,d){for(var b=a<<3|d,f=g.getBCHTypeInfo(b),h=0;15>h;h+=1)c[h<6?h:8>h?h+1:p-15+h][8]=(f>>h&1)==1;for(h=0;15>h;h+=1)c[8][14>h?p-h-1:15>h?15-h-1+1:15-h-1]=(f>>h&1)==1;c[p-8][8]=!0},C=function(c,d,b){for(var f=-1,h=p-1,k=7,m=0,t=g.getMaskFunction(b),q=p-1;0<q;q-=2)for(6==q&&(q-=1);;){for(var u=0;2>u;u+=1)if(null==c[h][q-u]){var w=!1;m<d.length&&(w=(d[m]>>>k&1)==1);t(h,q-u)&&(w=!w);c[h][q-u]=w;k-=1;-1==k&&(m+=1,k=7)}h+=f;if(0>h||p<=h){h-=f;f=-f;break}}},D=function(c,d){for(var b=0,h=0,k=0,m=new Array(d.length),p=new Array(d.length),q=0;q<d.length;q+=1){var t=d[q].dataCount,v=d[q].totalCount-t;h=Math.max(h,t);k=Math.max(k,v);m[q]=new Array(t);for(var u=0;u<m[q].length;u+=1)m[q][u]=255&c.getBuffer()[u+b];b+=t;var w=g.getErrorCorrectPolynomial(v),x=(new n(m[q],w.getLength()-1)).mod(w);p[q]=new Array(w.getLength()-1);for(u=0;u<p[q].length;u+=1)t=u+x.getLength()-p[q].length,p[q][u]=0<=t?x.getAt(t):0}for(q=u=0;q<d.length;q+=1)u+=d[q].totalCount;c=new Array(u);for(u=q=0;q<h;q+=1)for(b=0;b<d.length;b+=1)q<m[b].length&&(c[u++]=m[b][q]);for(q=0;q<k;q+=1)for(b=0;b<d.length;b+=1)q<p[b].length&&(c[u++]=p[b][q]);return c},B=function(c,d,a){for(var b=r.getRSBlocks(c,d),h=new s,k=0;k<a.length;k+=1){var p=a[k];h.put(p.getMode(),4);h.put(p.getLength(),g.getLengthInBits(p.getMode(),c));p.write(h)}for(k=c=0;k<b.length;k+=1)c+=b[k].dataCount;c*=8;if(h.getLengthInBits()>c)throw"code length overflow. ("+h.getLengthInBits()+">"+c+")";for(h.getLengthInBits()+4<=c&&h.put(0,4);0!=h.getLengthInBits()%8;)h.putBit(!1);for(;!(h.getLengthInBits()>=c);){h.put(236,8);if(h.getLengthInBits()>=c)break;h.put(17,8)}return D(h,b)};b.addData=function(c,d){d=d||"Byte";if("Byte"!=d)throw"mode:"+d;v.push(new w(c))};b.isDark=function(c,d){if(0>c||p<=c||0>d||p<=d)throw c+","+d;return l[c][d]};b.getModuleCount=function(){return p};b.make=function(){if(1>e){var c=1;for(c=1;40>c;c+=1){for(var d=r.getRSBlocks(c,a),f=new s,h=0;h<v.length;h+=1){var k=v[h];f.put(k.getMode(),4);f.put(k.getLength(),g.getLengthInBits(k.getMode(),c));k.write(f)}for(h=k=0;h<d.length;h+=1)k+=d[h].dataCount;if(f.getLengthInBits()<=8*k)break}e=c}h(!1,function(){for(var c=0,d=0,a=0;8>a;a+=1){h(!0,a);var b=g.getLostPoint(this);if(0==a||c>b)c=b,d=a}return d}())};return b},t={L:1,M:0,Q:3,H:2},g=function(){var c=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]],d=function(c){for(var d=0;0!=c;)d+=1,c>>>=1;return d};return{getBCHTypeInfo:function(c){for(var a=c<<10;0<=d(a)-d(1335);)a^=1335<<d(a)-d(1335);return(c<<10|a)^21522},getBCHTypeNumber:function(c){for(var a=c<<12;0<=d(a)-d(7973);)a^=7973<<d(a)-d(7973);return c<<12|a},getPatternPosition:function(d){return c[d-1]},getMaskFunction:function(c){switch(c){case 0:return function(c,d){return 0==(c+d)%2};case 1:return function(c,d){return 0==c%2};case 2:return function(c,d){return 0==d%3};case 3:return function(c,d){return 0==(c+d)%3};case 4:return function(c,d){return 0==(Math.floor(c/2)+Math.floor(d/3))%2};case 5:return function(c,d){return 0==c*d%2+c*d%3};case 6:return function(c,d){return 0==(c*d%2+c*d%3)%2};case 7:return function(c,d){return 0==(c*d%3+(c+d)%2)%2};default:throw"bad maskPattern:"+c}},getErrorCorrectPolynomial:function(c){for(var d=new n([1],0),a=0;a<c;a+=1)d=d.multiply(new n([1,f.gexp(a)],0));return d},getLengthInBits:function(c,d){if(1<=d&&10>d)return 8;if(d<27)return 16;if(d<41)return 16;throw"type:"+d;},getLostPoint:function(c){for(var d=c.getModuleCount(),a=0,b=0;b<d;b+=1)for(var f=0;f<d;f+=1){for(var h=0,k=c.isDark(b,f),g=-1;1>=g;g+=1)if(!(0>b+g||d<=b+g))for(var n=-1;1>=n;n+=1)0>f+n||d<=f+n||0==g&&0==n||k==c.isDark(b+g,f+n)&&(h+=1);5<h&&(a+=3+h-5)}for(b=0;b<d-1;b+=1)for(f=0;f<d-1;f+=1)h=0,c.isDark(b,f)&&(h+=1),c.isDark(b+1,f)&&(h+=1),c.isDark(b,f+1)&&(h+=1),c.isDark(b+1,f+1)&&(h+=1),(0==h||4==h)&&(a+=3);for(b=0;b<d;b+=1)for(f=0;f<d-6;f+=1)c.isDark(b,f)&&!c.isDark(b,f+1)&&c.isDark(b,f+2)&&c.isDark(b,f+3)&&c.isDark(b,f+4)&&!c.isDark(b,f+5)&&c.isDark(b,f+6)&&(a+=40);for(f=0;f<d;f+=1)for(b=0;b<d-6;b+=1)c.isDark(b,f)&&!c.isDark(b+1,f)&&c.isDark(b+2,f)&&c.isDark(b+3,f)&&c.isDark(b+4,f)&&!c.isDark(b+5,f)&&c.isDark(b+6,f)&&(a+=40);for(f=h=0;f<d;f+=1)for(b=0;b<d;b+=1)c.isDark(b,f)&&(h+=1);return a+Math.abs(100*h/d/d-50)/5*10}}}(),f=function(){var c=[],d=[],a;for(a=0;255>a;a+=1)c[a]=1<<a;for(a=8;255>a;a+=1)c[a]^=c[a-4]^c[a-5]^c[a-6]^c[a-8];for(a=0;255>a;a+=1)d[c[a]]=a;return{glog:function(c){if(1>c)throw"glog("+c+")";return d[c]},gexp:function(d){for(;0>d;)d+=255;for(;256<=d;)d-=255;return c[d]}}}(),n=function(c,d){if(void 0==c.length)throw c.length+"/"+d;for(var a=0;a<c.length&&0==c[a];)a+=1;var b=new Array(c.length-a+d);for(d=0;d<c.length-a;d+=1)b[d]=c[d+a];return{getAt:function(c){return b[c]},getLength:function(){return b.length},multiply:function(c){for(var a=new Array(this.getLength()+c.getLength()-1),d=0;d<this.getLength();d+=1)for(var b=0;b<c.getLength();b+=1)a[d+b]^=f.gexp(f.glog(this.getAt(d))+f.glog(c.getAt(b)));return new n(a,0)},mod:function(c){if(0>this.getLength()-c.getLength())return this;for(var a=f.glog(this.getAt(0))-f.glog(c.getAt(0)),d=new Array(this.getLength()),b=0;b<this.getLength();b+=1)d[b]=this.getAt(b);for(b=0;b<c.getLength();b+=1)d[b]^=f.gexp(f.glog(c.getAt(b))+a);return(new n(d,0)).mod(c)}}},r=function(){var c=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16]],d=function(c,a){return{totalCount:c,dataCount:a}};return{getRSBlocks:function(a,b){var f=function(c,d){switch(d){case 1:return c[0];case 0:return c[1];case 3:return c[2];case 2:return c[3]}}(c,b);if(void 0==f)throw"bad rs block @ typeNumber:"+a+"/errorCorrectLevel:"+b;b=f.length/3;for(var h=[],k=0;k<b;k+=1)for(var g=f[3*k],n=f[3*k+1],m=f[3*k+2],g=g;0<g;g--)h.push(d(n,m));return h}}}(),s=function(){var c=[],d=0,a={getBuffer:function(){return c},getAt:function(c){return(c[Math.floor(c/8)]>>>7-c%8&1)==1},put:function(c,d){for(var b=0;b<d;b+=1)a.putBit((c>>>d-b-1&1)==1)},getLengthInBits:function(){return d},putBit:function(a){var b=Math.floor(d/8);c.length<=b&&c.push(0);a&&(c[b]|=128>>>d%8);d+=1}};return a},w=function(c){var d=[],a;for(a=0;a<c.length;a+=1){var b=c.charCodeAt(a);128>b?d.push(b):2048>b?(d.push(192|b>>6),d.push(128|b&63)):65536>b?(d.push(224|b>>12),d.push(128|b>>6&63),d.push(128|b&63)):(d.push(240|b>>18),d.push(128|b>>12&63),d.push(128|b>>6&63),d.push(128|b&63))}c=d;return{getMode:function(){return 4},getLength:function(c){return c.length},write:function(d){for(var a=0;a<c.length;a+=1)d.put(c[a],8)}}};return c}();
+    this._lib = qrcode;
+    return qrcode;
+  }
+};
+
 
 /* === I.16 · PDFGEN · generación de PDF radicado con jsPDF (STEP-006) === */
 const PdfGen = {
@@ -3937,7 +4519,7 @@ const PdfGen = {
     doc.text('Eco', MARGIN + 1.5, y + 5.5);
     setColor(COLOR_TEXT);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-    doc.text('EcoSentinel', MARGIN + 12, y + 5.5);
+    doc.text('Eco-Complaint', MARGIN + 12, y + 5.5);
     setColor(COLOR_SOFT);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     doc.text('Plataforma ciudadana de denuncia ambiental', MARGIN + 12, y + 9);
@@ -3950,21 +4532,33 @@ const PdfGen = {
     doc.line(MARGIN, y, PAGE_W - MARGIN, y);
     y += 8;
 
-    /* RADICADO BOX */
+    /* RADICADO BOX con QR (STEP-008) */
     setFillColor(COLOR_SUBTLE);
-    doc.roundedRect(MARGIN, y, CONTENT_W, 22, 2, 2, 'F');
+    doc.roundedRect(MARGIN, y, CONTENT_W, 30, 2, 2, 'F');
     doc.setDrawColor(COLOR_BRAND[0], COLOR_BRAND[1], COLOR_BRAND[2]);
     doc.setLineWidth(0.4);
     doc.setLineDashPattern([1.5, 1.5], 0);
-    doc.roundedRect(MARGIN, y, CONTENT_W, 22, 2, 2, 'S');
+    doc.roundedRect(MARGIN, y, CONTENT_W, 30, 2, 2, 'S');
     doc.setLineDashPattern([], 0);
+    /* Texto del radicado */
     setColor(COLOR_SOFT);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
     doc.text('NÚMERO DE RADICADO', MARGIN + 6, y + 8);
     setColor(COLOR_DEEP);
     doc.setFont('courier', 'bold'); doc.setFontSize(18);
     doc.text(report.radicado, MARGIN + 6, y + 17);
-    y += 28;
+    setColor(COLOR_SOFT);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+    doc.text('Escanea el QR para consultar el estado actualizado', MARGIN + 6, y + 25);
+    /* QR del radicado (lleva al endpoint de consulta) */
+    try {
+      const qrTargetUrl = 'https://Eco-Complaint.app/#/consulta?radicado=' + encodeURIComponent(report.radicado);
+      const qrDataUrl = QRGen.toDataURL(qrTargetUrl, { size: 200 });
+      doc.addImage(qrDataUrl, 'PNG', PAGE_W - MARGIN - 26, y + 2, 26, 26);
+    } catch (e) {
+      console.warn('QR generation failed:', e);
+    }
+    y += 36;
 
     /* META en dos columnas */
     const colW = CONTENT_W / 2;
@@ -4155,7 +4749,7 @@ const PdfGen = {
       doc.text(`⚠ Este radicado incluye ${videoEvidence.length} video(s) que no se pueden embeber en el PDF.`, MARGIN + 3, y + 4);
       setColor(COLOR_SOFT);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-      doc.text('Solicítelos al correo maestro: radicacion@ecosentinel.demo.co', MARGIN + 3, y + 8);
+      doc.text('Solicítelos al correo maestro: radicacion@Eco-Complaint.demo.co', MARGIN + 3, y + 8);
       y += 14;
     }
 
@@ -4194,7 +4788,7 @@ const PdfGen = {
       setColor(COLOR_SOFT);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
       doc.text(
-        'EcoSentinel · Marco normativo: Ley 2111 de 2021 (Colombia) · Documento generado automáticamente',
+        'Eco-Complaint · Marco normativo: Ley 2111 de 2021 (Colombia) · Documento generado automáticamente',
         PAGE_W / 2, PAGE_H - 10, { align: 'center' }
       );
       doc.text(`Página ${p} de ${pageCount}`, PAGE_W - MARGIN, PAGE_H - 10, { align: 'right' });
@@ -4208,6 +4802,432 @@ const PdfGen = {
       filename, images_embedded: imgEvidence.length, videos_referenced: videoEvidence.length
     });
     Toast.show(`PDF descargado · ${filename}`);
+  }
+};
+
+/* === I.21 · PUBLIC STATS · estadísticas públicas en home (STEP-008) === */
+const PublicStats = {
+  render() {
+    const root = document.getElementById('public-stats');
+    if (!root) return;
+    const reports = Persist.get('reports', []);
+    const total = reports.length;
+    if (total === 0) {
+      root.innerHTML = `
+        <div class="public-stats-empty">
+          <p>Aún no hay denuncias en el sistema. Sé el primero en reportar un caso.</p>
+        </div>
+      `;
+      return;
+    }
+    const resolved = reports.filter(r => r.status === 'resolved').length;
+    const inProgress = reports.filter(r => r.status === 'in_progress' || r.status === 'triaged').length;
+    const resolvedPct = total > 0 ? Math.round(resolved / total * 100) : 0;
+
+    /* Top categoría por delitos */
+    const delitos = Persist.get('delitos');
+    const catCounts = {};
+    reports.forEach(r => (r.delitos || []).forEach(art => {
+      if (delitos[art]) catCounts[delitos[art].cat] = (catCounts[delitos[art].cat] || 0) + 1;
+    }));
+    const topCat = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0];
+
+    /* Última 30 días para "tendencia reciente" */
+    const cutoff = Date.now() - 30 * 86400000;
+    const recent = reports.filter(r => new Date(r.created_at).getTime() >= cutoff).length;
+
+    root.innerHTML = `
+      <div class="public-stats-header">
+        <span class="pill">Transparencia institucional</span>
+        <h2>El estado de las denuncias hoy</h2>
+        <p>Datos abiertos actualizados en tiempo real · ${new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+      </div>
+      <div class="public-stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">${total}</div>
+          <div class="stat-label">Denuncias totales</div>
+          <div class="stat-sub">${recent} en los últimos 30 días</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${inProgress}</div>
+          <div class="stat-label">En investigación</div>
+          <div class="stat-sub">Casos activos</div>
+        </div>
+        <div class="stat-card stat-card-highlight">
+          <div class="stat-value">${resolvedPct}<span style="font-size:24px">%</span></div>
+          <div class="stat-label">Tasa de resolución</div>
+          <div class="stat-sub">${resolved} de ${total} resueltas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value-text">${topCat ? topCat[0] : '—'}</div>
+          <div class="stat-label">Categoría más denunciada</div>
+          <div class="stat-sub">${topCat ? topCat[1] + ' casos' : ''}</div>
+        </div>
+      </div>
+      <p class="public-stats-foot muted">Los datos provienen del sistema interno de Eco-Complaint y se actualizan automáticamente con cada nueva denuncia y cambio de estado.</p>
+    `;
+  }
+};
+
+/* === I.17 · PUBLIC LOOKUP · consulta pública de radicados (STEP-007) === */
+const PublicLookup = {
+  /* Normaliza el radicado: uppercase + trim. Acepta con o sin prefijo ECO- */
+  normalize(input) {
+    let s = (input || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (!s) return '';
+    if (!s.startsWith('ECO-')) s = 'ECO-' + s;
+    return s;
+  },
+
+  /* Etiquetas legibles por estado */
+  statusLabel(s) {
+    const map = {
+      received:    'Recibida',
+      triaged:     'Triada',
+      in_progress: 'En investigación',
+      resolved:    'Resuelta'
+    };
+    return map[s] || s;
+  },
+
+  /* Descripción ciudadana del estado (lenguaje claro, no jerga interna) */
+  statusDescription(s) {
+    const map = {
+      received:    'Tu denuncia fue radicada en el sistema y notificada a las autoridades competentes. Pronto inician el proceso de triaje.',
+      triaged:     'Las autoridades revisaron tu denuncia y la asignaron al equipo correspondiente para investigación.',
+      in_progress: 'Las autoridades están investigando activamente el caso reportado.',
+      resolved:    'El caso fue cerrado por las autoridades. Si requieres información sobre el resultado, contacta a la entidad competente.'
+    };
+    return map[s] || '';
+  },
+
+  /* Icono SVG por estado */
+  statusIcon(s) {
+    const icons = {
+      received:    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
+      triaged:     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+      in_progress: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      resolved:    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+    };
+    return icons[s] || icons.received;
+  },
+
+  render() {
+    /* Si hay query string ?radicado=X, pre-llenar y buscar */
+    const query = (window.location.hash.split('?')[1] || '').match(/radicado=([^&]+)/);
+    if (query) {
+      setTimeout(() => {
+        const input = document.getElementById('consulta-input');
+        if (input) {
+          input.value = decodeURIComponent(query[1]);
+          this.search();
+        }
+      }, 50);
+    }
+    this.bindHandlers();
+  },
+
+  bindHandlers() {
+    const btn   = document.getElementById('consulta-search-btn');
+    const input = document.getElementById('consulta-input');
+    if (btn) btn.onclick = () => this.search();
+    if (input) {
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); this.search(); }
+      };
+      /* Auto-uppercase mientras escribe */
+      input.oninput = (e) => {
+        const start = e.target.selectionStart;
+        e.target.value = e.target.value.toUpperCase();
+        e.target.setSelectionRange(start, start);
+      };
+    }
+  },
+
+  search() {
+    const input = document.getElementById('consulta-input');
+    if (!input) return;
+    const raw = input.value;
+    const radicado = this.normalize(raw);
+    if (!radicado || radicado.length < 10) {
+      Toast.show('Ingresa un número de radicado válido', 'error');
+      return;
+    }
+    const reports = Persist.get('reports', []);
+    const report = reports.find(r => r.radicado === radicado);
+    Audit.log('public_lookup', 'report', radicado, { found: !!report });
+
+    const resultEl = document.getElementById('consulta-result');
+    if (!resultEl) return;
+
+    if (!report) {
+      resultEl.innerHTML = `
+        <div class="consulta-empty">
+          <div class="consulta-empty-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <h3>Radicado no encontrado</h3>
+          <p>No hay ninguna denuncia con el número <code class="mono">${radicado}</code> en nuestro sistema. Verifica que el número esté correcto y vuelve a intentar.</p>
+          <a class="btn btn-ghost" href="#/contacto">Contactar para ayuda</a>
+        </div>
+      `;
+      return;
+    }
+    /* Renderizar tarjeta de estado + timeline */
+    resultEl.innerHTML = this.renderResult(report);
+  },
+
+  renderResult(report) {
+    const delitos = Persist.get('delitos');
+    const status = report.status || 'received';
+    const created = new Date(report.created_at);
+    const diasDesde = Math.floor((Date.now() - created.getTime()) / 86400000);
+    const diasStr = diasDesde === 0 ? 'hoy' : (diasDesde === 1 ? 'hace 1 día' : `hace ${diasDesde} días`);
+
+    /* Timeline desde audit_log: report_send + status_change(s) */
+    const auditEntries = Persist.get('audit_log', [])
+      .filter(e => e.entity === 'report' && e.entity_id === report.radicado)
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    const events = [];
+    /* Evento de creación · siempre primero */
+    events.push({
+      ts: report.created_at,
+      title: 'Denuncia recibida en el sistema',
+      desc: `Tu denuncia fue radicada y notificada a las autoridades competentes (${(report.authorities_notified || []).length} destinatarios).`
+    });
+    /* Eventos de cambio de estado · solo status_change */
+    auditEntries.filter(e => e.action === 'status_change').forEach(e => {
+      const meta = e.metadata || {};
+      events.push({
+        ts: e.timestamp,
+        title: 'Estado actualizado a "' + this.statusLabel(meta.to) + '"',
+        desc: this.statusDescription(meta.to)
+      });
+    });
+    /* Marcar el último como actual */
+    if (events.length > 0) events[events.length - 1].current = true;
+
+    /* Última actualización · relativa */
+    const lastUpdateTs = events[events.length - 1].ts;
+    const lastUpdateRel = this.relativeTime(lastUpdateTs);
+
+    /* Artículos (números, sin descripción específica) */
+    const delitosHtml = (report.delitos || []).map(art => {
+      const d = delitos[art];
+      return `<div class="review-delito-item"><span class="art">Art. ${art}</span><span>${d ? d.cat : 'Delito ambiental'}</span></div>`;
+    }).join('');
+
+    return `
+      <div class="consulta-status-card">
+        <div class="consulta-status-head">
+          <div>
+            <div class="consulta-radicado-label">Radicado</div>
+            <div class="consulta-radicado-num">${report.radicado}</div>
+          </div>
+          <span class="band-pill" data-band="${report.band}">${Risk.bandLabel(report.band)}</span>
+        </div>
+
+        <div class="consulta-status-hero">
+          <div class="consulta-status-icon" data-status="${status}">${this.statusIcon(status)}</div>
+          <div class="consulta-status-text">
+            <strong>${this.statusLabel(status)}</strong>
+            <span>${this.statusDescription(status)}</span>
+            <div class="consulta-last-update">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Última actualización: <strong>${lastUpdateRel}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="consulta-meta-grid">
+          <div class="consulta-meta-item">
+            <div class="lbl">Fecha de radicación</div>
+            <div class="val">${created.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            <div class="muted" style="font-size: 11px; margin-top: 2px">${diasStr}</div>
+          </div>
+          <div class="consulta-meta-item">
+            <div class="lbl">Categoría del hecho</div>
+            <div class="val">${this.categoryFromDelitos(report.delitos, delitos)}</div>
+          </div>
+        </div>
+
+        <div style="margin-top: var(--s-5)">
+          <h4 style="font-size: 13px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--s-3)">Artículos del Código Penal infringidos</h4>
+          <div class="review-delitos-list">${delitosHtml}</div>
+        </div>
+
+        <div style="margin-top: var(--s-6)">
+          <h4 style="font-size: 13px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--s-3)">Historial de actualizaciones</h4>
+          <div class="timeline">
+            ${events.map(ev => `
+              <div class="timeline-item" data-current="${!!ev.current}">
+                <div class="timeline-dot"></div>
+                <div class="timeline-date">${new Date(ev.ts).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="timeline-title">${ev.title}</div>
+                <div class="timeline-desc">${ev.desc}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="info-card-soft" style="margin-top: var(--s-6)">
+          <h4>¿Necesitas más información sobre este caso?</h4>
+          <p>Por razones de privacidad, esta vista pública no muestra ubicación exacta, evidencias adjuntas ni descripción del denunciante. Si eres autoridad o tienes interés legítimo en el caso, contacta al correo maestro <code>radicacion@Eco-Complaint.demo.co</code> citando el número de radicado.</p>
+        </div>
+      </div>
+    `;
+  },
+
+  /* Tiempo relativo legible · "hace 2 horas", "ayer", "hace 3 días" */
+  relativeTime(ts) {
+    const d = new Date(ts);
+    const diffMs = Date.now() - d.getTime();
+    const sec = Math.floor(diffMs / 1000);
+    const min = Math.floor(sec / 60);
+    const hr  = Math.floor(min / 60);
+    const day = Math.floor(hr / 24);
+    if (sec < 60)  return 'hace unos segundos';
+    if (min < 60)  return min === 1 ? 'hace 1 minuto' : `hace ${min} minutos`;
+    if (hr  < 24)  return hr  === 1 ? 'hace 1 hora'   : `hace ${hr} horas`;
+    if (day === 1) return 'ayer';
+    if (day < 7)   return `hace ${day} días`;
+    if (day < 30)  return `hace ${Math.floor(day/7)} semana${Math.floor(day/7)>1?'s':''}`;
+    if (day < 365) return `hace ${Math.floor(day/30)} mes${Math.floor(day/30)>1?'es':''}`;
+    return `hace ${Math.floor(day/365)} año${Math.floor(day/365)>1?'s':''}`;
+  },
+
+  /* Deriva una categoría legible a partir de los delitos */
+  categoryFromDelitos(arts, delitos) {
+    if (!arts || arts.length === 0) return 'No especificada';
+    const cats = new Set();
+    arts.forEach(a => { if (delitos[a]) cats.add(delitos[a].cat); });
+    return Array.from(cats).join(' · ');
+  }
+};
+
+/* === I.18 · CONTACT · página de contacto público (STEP-007) === */
+const Contact = {
+  render() {
+    const cfg = Persist.get('config.contact');
+    const root = document.getElementById('contact-container');
+    if (!root) return;
+    root.innerHTML = `
+      <div class="page-head">
+        <span class="pill">Estamos para ayudarte</span>
+        <h1>Contactar Eco-Complaint</h1>
+        <p>Resolvemos dudas sobre denuncias ambientales, el proceso legal o el uso de la plataforma.</p>
+      </div>
+
+      <div class="contact-grid">
+        <div class="contact-info-card">
+          <div class="contact-info-head">
+            <div class="contact-mark">Eco</div>
+            <div>
+              <h2>${cfg.org_name}</h2>
+              <div class="soft">${cfg.tagline}</div>
+            </div>
+          </div>
+
+          <div class="contact-row">
+            <div class="contact-row-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div class="contact-row-body">
+              <div class="contact-row-label">Teléfono general</div>
+              <div class="contact-row-value"><a href="tel:${cfg.phone.replace(/[^0-9+]/g, '')}">${cfg.phone}</a></div>
+            </div>
+          </div>
+
+          <div class="contact-row">
+            <div class="contact-row-icon" style="background: var(--alarm-soft); color: var(--alarm)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="contact-row-body">
+              <div class="contact-row-label">Línea de emergencia ambiental · 24/7</div>
+              <div class="contact-row-value"><a href="tel:${cfg.phone_emergency.replace(/[^0-9+]/g, '')}">${cfg.phone_emergency}</a></div>
+            </div>
+          </div>
+
+          <div class="contact-row">
+            <div class="contact-row-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <div class="contact-row-body">
+              <div class="contact-row-label">Correo electrónico</div>
+              <div class="contact-row-value"><a href="mailto:${cfg.email}">${cfg.email}</a></div>
+            </div>
+          </div>
+
+          <div class="contact-row">
+            <div class="contact-row-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <div class="contact-row-body">
+              <div class="contact-row-label">Dirección</div>
+              <div class="contact-row-value">${cfg.address}</div>
+            </div>
+          </div>
+
+          <div class="contact-row">
+            <div class="contact-row-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="contact-row-body">
+              <div class="contact-row-label">Horario de atención</div>
+              <div class="contact-row-value">${cfg.hours}</div>
+            </div>
+          </div>
+
+          <div class="contact-quick-actions">
+            <a class="btn btn-primary" href="tel:${cfg.phone.replace(/[^0-9+]/g, '')}">📞 Llamar ahora</a>
+            <a class="btn btn-soft" href="mailto:${cfg.email}">✉ Enviar correo</a>
+          </div>
+        </div>
+
+        <div class="contact-form-card">
+          <h3>Enviar consulta</h3>
+          <p>Escribe tu mensaje y se abrirá tu cliente de correo con todo pre-llenado para que solo presiones enviar.</p>
+
+          <label class="label" for="contact-name">Tu nombre</label>
+          <input class="input" id="contact-name" placeholder="Cómo te llamas" autocomplete="name">
+
+          <label class="label" for="contact-subject">Asunto</label>
+          <select class="input" id="contact-subject">
+            <option value="Consulta general">Consulta general</option>
+            <option value="Pregunta sobre denuncia">Pregunta sobre una denuncia (incluye radicado)</option>
+            <option value="Problema técnico de la plataforma">Problema técnico de la plataforma</option>
+            <option value="Información para autoridades">Información para autoridades</option>
+            <option value="Sugerencia o mejora">Sugerencia o mejora</option>
+            <option value="Otro">Otro</option>
+          </select>
+
+          <label class="label" for="contact-msg">Tu mensaje</label>
+          <textarea class="input" id="contact-msg" rows="6" placeholder="Cuéntanos cómo podemos ayudarte..."></textarea>
+
+          <button class="btn btn-primary btn-lg" id="contact-send-btn">Abrir mi correo y enviar</button>
+        </div>
+      </div>
+
+      <div class="info-card-soft">
+        <h4>Para denuncias urgentes ambientales</h4>
+        <p>Si presencias un delito ambiental <strong>en curso o de impacto crítico</strong> (vertimientos tóxicos, ecocidio, tráfico masivo de fauna), llama directamente a la línea de emergencia <strong>${cfg.phone_emergency}</strong> antes de radicar la denuncia formal. La acción rápida puede evitar daños mayores.</p>
+      </div>
+    `;
+
+    /* Bind del botón mailto */
+    const sendBtn = document.getElementById('contact-send-btn');
+    if (sendBtn) sendBtn.onclick = () => {
+      const name    = (document.getElementById('contact-name').value || 'Visitante').trim();
+      const subject = document.getElementById('contact-subject').value;
+      const msg     = document.getElementById('contact-msg').value.trim();
+      if (!msg) { Toast.show('Escribe tu mensaje antes de enviar', 'error'); return; }
+      const body = `${msg}\n\n—\nEnviado desde Eco-Complaint\nNombre: ${name}`;
+      const mailto = `mailto:${cfg.email}?subject=${encodeURIComponent('[' + subject + '] consulta vía Eco-Complaint')}&body=${encodeURIComponent(body)}`;
+      Audit.log('contact_send', 'contact', null, { subject });
+      window.location.href = mailto;
+      Toast.show('Abriendo tu app de correo...');
+    };
   }
 };
 
@@ -4859,17 +5879,54 @@ const Admin = {
     render(root) {
       const cfg = Persist.get('config.authorities');
       const meta = Persist.get('authorities_meta');
+      const contact = Persist.get('config.contact') || {};
       const bands = ['bajo', 'medio', 'alto', 'critico', 'extremo'];
 
       root.innerHTML = `
         <div class="admin-content-head">
-          <div><h2>Configuración</h2><p>Correos de autoridades por banda y notificación maestra.</p></div>
+          <div><h2>Configuración</h2><p>Correos de autoridades por banda, notificación maestra y datos públicos de contacto.</p></div>
           <div class="actions"><button class="btn btn-ghost btn-sm" id="cfg-reset-btn">Restaurar valores demo</button></div>
         </div>
+
+        <div class="dash-card">
+          <h4>Datos públicos de contacto</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 16px">Esta información aparece en la página pública de contacto (/contacto) para que cualquier visitante pueda comunicarse con la entidad operadora.</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+            <div>
+              <label class="label">Nombre de la organización</label>
+              <input class="input" data-contact-key="org_name" value="${contact.org_name || ''}">
+            </div>
+            <div>
+              <label class="label">Tagline / descripción corta</label>
+              <input class="input" data-contact-key="tagline" value="${contact.tagline || ''}">
+            </div>
+            <div>
+              <label class="label">Email público</label>
+              <input class="input" type="email" data-contact-key="email" value="${contact.email || ''}">
+            </div>
+            <div>
+              <label class="label">Teléfono general</label>
+              <input class="input" data-contact-key="phone" value="${contact.phone || ''}">
+            </div>
+            <div>
+              <label class="label">Teléfono emergencia 24/7</label>
+              <input class="input" data-contact-key="phone_emergency" value="${contact.phone_emergency || ''}">
+            </div>
+            <div>
+              <label class="label">Horario de atención</label>
+              <input class="input" data-contact-key="hours" value="${contact.hours || ''}">
+            </div>
+            <div style="grid-column: 1 / -1">
+              <label class="label">Dirección física</label>
+              <input class="input" data-contact-key="address" value="${contact.address || ''}">
+            </div>
+          </div>
+        </div>
+
         <div class="dash-card">
           <h4>Correo maestro de radicación</h4>
           <p class="soft" style="font-size: 14px; margin-bottom: 16px">Recibe copia de <strong>todas</strong> las denuncias, sin importar la banda. Es el archivo central de la plataforma.</p>
-          <input class="input" id="cfg-master" value="${cfg.master_email || ''}" placeholder="radicacion@ecosentinel.demo.co">
+          <input class="input" id="cfg-master" value="${cfg.master_email || ''}" placeholder="radicacion@Eco-Complaint.demo.co">
         </div>
         ${bands.map(b => `
           <div class="dash-card">
@@ -4895,7 +5952,13 @@ const Admin = {
           newCfg[b] = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
         });
         Persist.set('config.authorities', newCfg);
-        Audit.log('config_save', 'config', null, newCfg);
+        /* Guardar también datos de contacto */
+        const newContact = { ...contact };
+        document.querySelectorAll('[data-contact-key]').forEach(el => {
+          newContact[el.dataset.contactKey] = el.value.trim();
+        });
+        Persist.set('config.contact', newContact);
+        Audit.log('config_save', 'config', null, { authorities: newCfg, contact: newContact });
         Toast.show('Configuración guardada');
       };
       document.getElementById('cfg-reset-btn').onclick = async () => {
@@ -4911,7 +5974,7 @@ const Admin = {
           alto: ['anla@demo.co', 'car-regional@demo.co'],
           critico: ['fiscalia122@demo.co', 'anla@demo.co', 'car-regional@demo.co'],
           extremo: ['fiscalia122@demo.co', 'anla@demo.co', 'denuncias@minambiente.gov.co', 'policia-ambiental@demo.co', 'car-regional@demo.co'],
-          master_email: 'radicacion@ecosentinel.demo.co'
+          master_email: 'radicacion@Eco-Complaint.demo.co'
         });
         Toast.show('Configuración demo restaurada');
         Admin.config.render(root);
@@ -4966,19 +6029,19 @@ const Admin = {
           (r.evidence || []).length, (r.authorities_notified || []).length, r.status
         ]);
         content = [headers.join(','), ...rows.map(r => r.map(c => typeof c === 'string' && c.includes(',') ? `"${c}"` : c).join(','))].join('\n');
-        filename = `ecosentinel_denuncias_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `Eco-Complaint_denuncias_${new Date().toISOString().slice(0, 10)}.csv`;
         mime = 'text/csv';
       } else if (format === 'json') {
         const cleaned = reports.map(r => ({ ...r, evidence: (r.evidence || []).map(e => ({ id: e.id, type: e.type, name: e.name, mime: e.mime, size: e.size, description: e.description, timestamp: e.timestamp })) }));
         content = JSON.stringify(cleaned, null, 2);
-        filename = `ecosentinel_denuncias_${new Date().toISOString().slice(0, 10)}.json`;
+        filename = `Eco-Complaint_denuncias_${new Date().toISOString().slice(0, 10)}.json`;
         mime = 'application/json';
       } else {
         const log = Persist.get('audit_log', []);
         const headers = ['log_id', 'timestamp', 'user_id', 'action', 'entity', 'entity_id'];
         const rows = log.map(e => [e.log_id, e.timestamp, e.user_id || '', e.action, e.entity, e.entity_id || '']);
         content = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        filename = `ecosentinel_audit_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `Eco-Complaint_audit_${new Date().toISOString().slice(0, 10)}.csv`;
         mime = 'text/csv';
       }
       const blob = new Blob([content], { type: mime });
@@ -5197,10 +6260,10 @@ const UI = {
     nav.innerHTML = '';
     const items = session
       ? (Auth.isAdmin()
-          ? [{ href: '#/admin', label: 'Panel admin' }, { href: '#/denunciar', label: 'Denunciar' }]
-          : [{ href: '#/denunciar', label: 'Denunciar' }, { href: '#/mis-denuncias', label: 'Mis denuncias' }]
+          ? [{ href: '#/admin', label: 'Panel admin' }, { href: '#/denunciar', label: 'Denunciar' }, { href: '#/consulta', label: 'Consultar' }, { href: '#/contacto', label: 'Contacto' }]
+          : [{ href: '#/denunciar', label: 'Denunciar' }, { href: '#/mis-denuncias', label: 'Mis denuncias' }, { href: '#/consulta', label: 'Consultar' }, { href: '#/contacto', label: 'Contacto' }]
         )
-      : [{ href: '#/denunciar', label: 'Denunciar' }, { href: '#/iniciar-sesion', label: 'Iniciar sesión' }];
+      : [{ href: '#/denunciar', label: 'Denunciar' }, { href: '#/consulta', label: 'Consultar' }, { href: '#/contacto', label: 'Contacto' }, { href: '#/iniciar-sesion', label: 'Iniciar sesión' }];
     items.forEach(it => {
       const a = document.createElement('a');
       a.className = 'nav-link' + (('#' + route) === it.href ? ' active' : '');
@@ -5243,6 +6306,23 @@ const UI = {
     const draft = Persist.get('draft');
     const show = route.startsWith('/denunciar') && draft && draft.isAnonymous && !Auth.current();
     banner.classList.toggle('hidden', !show);
+  },
+
+  /* CTA del home: si hay sesión, no mostrar el botón "Iniciar sesión" (redundante) */
+  updateLandingCTA() {
+    const cta = document.getElementById('landing-cta');
+    if (!cta) return;
+    const session = Auth.current();
+    if (session) {
+      cta.innerHTML = Auth.isAdmin()
+        ? `<a class="btn btn-primary btn-lg" href="#/admin">Ir al panel admin</a>
+           <a class="btn btn-ghost btn-lg" href="#/denunciar">Hacer una denuncia</a>`
+        : `<a class="btn btn-primary btn-lg" href="#/denunciar">Empezar denuncia</a>
+           <a class="btn btn-ghost btn-lg" href="#/mis-denuncias">Mis denuncias</a>`;
+    } else {
+      cta.innerHTML = `<a class="btn btn-primary btn-lg" href="#/denunciar">Empezar denuncia</a>
+                       <a class="btn btn-ghost btn-lg" href="#/iniciar-sesion">Iniciar sesión</a>`;
+    }
   }
 };
 
@@ -5379,8 +6459,8 @@ function bindHandlers() {
 
   /* Reactividad */
   safe('bus', function() {
-    Bus.on('auth:login',  function() { UI.updateNav(); });
-    Bus.on('auth:logout', function() { UI.updateNav(); UI.updateGuestBanner(); });
+    Bus.on('auth:login',  function() { UI.updateNav(); UI.updateLandingCTA(); });
+    Bus.on('auth:logout', function() { UI.updateNav(); UI.updateGuestBanner(); UI.updateLandingCTA(); });
   });
 }
 
@@ -5395,8 +6475,9 @@ function init() {
     Router.init();                 diag('✓ Router.init · hash=' + (window.location.hash || '(vacío)'));
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
-    Audit.log('app_init', 'system', null, { version: '0.6.4', step: 'STEP-006-safari-diag' });
-    console.log('%cEcoSentinel · v0.6.4 · Diagnóstico iOS Safari', 'color:#2EAA70;font-weight:600;font-size:13px');
+    UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
+    Audit.log('app_init', 'system', null, { version: '0.8.0', step: 'STEP-008' });
+    console.log('%cEco-Complaint · v0.8.0 · Mejoras UX (copy, QR, relativeTime, public stats)', 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
     if (!Persist.isAvailable()) {
       Toast.show('⚠ Modo memoria: los datos se perderán al recargar (Safari privado o sin localStorage)', 'error', 8000);
@@ -5442,6 +6523,39 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.8.0 · STEP-008 · 2026-05-10 · Mejoras UX detectadas
+   + Botón copy-to-clipboard del radicado en SentView (clickable, accesible)
+   + Módulo Clipboard universal con fallback execCommand (Safari iOS antiguo)
+   + Animación visual "✓ ¡Copiado!" al hacer copy
+   + Módulo QRGen vanilla (~120 líneas, sin CDN, MIT qrcode-generator condensado)
+   + QR del radicado embebido en el PDF (esquina superior derecha del recuadro)
+   + QR apunta a https://Eco-Complaint.app/#/consulta?radicado=X para escaneo móvil
+   + Indicador "Última actualización: hace X" en tarjeta de consulta
+   + Método PublicLookup.relativeTime con escalas (segundos, min, h, días, sem, meses, años)
+   + Módulo PublicStats: tarjetas de transparencia en home
+     · Total denuncias + recientes 30 días
+     · En investigación (triaged + in_progress)
+     · Tasa de resolución % destacada en verde
+     · Categoría más denunciada
+   + Empty state si no hay denuncias aún
+   + Botón "Iniciar sesión" del home se oculta si ya hay sesión activa
+   + UI.updateLandingCTA dinámico según rol (admin → panel, ciudadano → mis denuncias)
+   + Auditoría: radicado_copy
+
+   v0.7.0 · STEP-007 · 2026-05-10 · Acceso público sin login
+   + Vistas /consulta y /contacto + módulos PublicLookup y Contact
+   + Privacy by design en consulta pública
+   + Quick actions en home + links públicos en nav
+
+   v0.6.4 · 2026-05-10 · Compatibilidad Safari iOS + diag visual
+   + Panel de diagnóstico siempre visible (esquina inferior derecha)
+   + Aviso JS-requerido si se abre desde WebView de WhatsApp/Files/Mail
+   + Scripts externos movidos al final del body (sin integrity/crossorigin)
+   + Meta no-cache para evitar caché agresiva de Safari
+   + bindHandlers blindado por bloque con try/catch granular
+   + Recuperación automática de home si router falla
+   - Eliminado operador ||= (incompatible con Safari iOS < 14)
+
    v0.6.0 · STEP-006 · 2026-05-10  ·  Fase 0 COMPLETA
    + Módulo PdfGen: PDF formal del radicado con jsPDF 2.5.1
    + Layout A4 con cabecera marca, recuadro radicado destacado,
