@@ -9,23 +9,96 @@
 <meta name="description" content="Eco-Complaint — Plataforma ciudadana de denuncia de delitos ambientales (Colombia · Ley 2111/2021)">
 <title>Eco-Complaint · Denuncia ciudadana de delitos ambientales</title>
 
+<!-- ============================================================
+     Open Graph + Twitter Card · previews al compartir el link
+     ============================================================
+     IMPORTANTE: al desplegar en GitHub Pages o dominio propio, actualizar
+     "og:url" y "og:image" con la URL absoluta del sitio. Los crawlers de
+     WhatsApp/Twitter/Facebook NO resuelven URLs relativas. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Eco-Complaint · Denuncia ciudadana de delitos ambientales">
+<meta property="og:description" content="Plataforma ciudadana para denunciar delitos ambientales en Colombia bajo la Ley 2111 de 2021. Árbol jurídico + modelo de riesgo CONESA + direccionamiento automático a autoridades.">
+<meta property="og:site_name" content="Eco-Complaint">
+<meta property="og:locale" content="es_CO">
+<!-- TODO: actualizar al desplegar -->
+<meta property="og:url" content="https://[USUARIO].github.io/Eco-Complaint/">
+<meta property="og:image" content="https://[USUARIO].github.io/Eco-Complaint/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Eco-Complaint · Denuncia ambiental ciudadana">
+<meta name="twitter:description" content="Denuncia delitos ambientales en Colombia bajo la Ley 2111 de 2021.">
+
+<!-- ============================================================
+     Web App Manifest + iOS Add to Home Screen + favicon
+     ============================================================
+     Manifest se inyecta en runtime vía Blob URL (mantiene single-file).
+     Los meta apple-* permiten Add to Home Screen en iOS Safari.
+     Icono SVG inline data-URI (hoja Brote estilizada, marca verde). -->
+<meta name="theme-color" content="#2EAA70">
+<meta name="application-name" content="Eco-Complaint">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Eco-Complaint">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23E0F3E8' rx='96'/%3E%3Cpath d='M256 96 C 160 144 144 256 144 320 C 144 384 192 432 256 432 C 320 432 368 384 368 320 C 368 256 352 144 256 96 Z' fill='%232EAA70'/%3E%3Cpath d='M256 144 L 256 416' stroke='%231F6F4A' stroke-width='14' stroke-linecap='round' fill='none'/%3E%3Cpath d='M256 240 Q 200 220 184 184' stroke='%231F6F4A' stroke-width='10' stroke-linecap='round' fill='none'/%3E%3Cpath d='M256 304 Q 312 284 328 248' stroke='%231F6F4A' stroke-width='10' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23E0F3E8' rx='96'/%3E%3Cpath d='M256 96 C 160 144 144 256 144 320 C 144 384 192 432 256 432 C 320 432 368 384 368 320 C 368 256 352 144 256 96 Z' fill='%232EAA70'/%3E%3Cpath d='M256 144 L 256 416' stroke='%231F6F4A' stroke-width='14' stroke-linecap='round' fill='none'/%3E%3Cpath d='M256 240 Q 200 220 184 184' stroke='%231F6F4A' stroke-width='10' stroke-linecap='round' fill='none'/%3E%3Cpath d='M256 304 Q 312 284 328 248' stroke='%231F6F4A' stroke-width='10' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+
+<!-- ============================================================
+     FASE 1 · CREDENCIALES SUPABASE  (STEP-101)
+     ============================================================
+     Reemplaza los dos valores siguientes con los reales del proyecto
+     Supabase (Dashboard → Settings → API). Mientras sean placeholder,
+     la app permanece en backend localStorage y NO intenta conectarse.
+     La anon key es PÚBLICA por diseño de Supabase — la seguridad real
+     viene de las políticas RLS (Row-Level Security) configuradas en
+     Postgres, no de ocultar esta key. Es seguro commitearla.
+     ============================================================ -->
+<script>
+  window.__SUPABASE_URL      = 'TU_SUPABASE_URL';      /* ej: https://abcdwxyz.supabase.co */
+  window.__SUPABASE_ANON_KEY = 'TU_SUPABASE_ANON_KEY'; /* eyJhbGciOi... (larga, empieza con eyJ) */
+</script>
+
+<!-- Carga diferida del SDK Supabase v2 como módulo ESM.
+     window.__supabaseReady es una Promise que resuelve a createClient
+     cuando el SDK termine de bajar. No bloquea el parser ni el init(). -->
+<script>
+  window.__supabaseReady = new Promise(function(resolve, reject) {
+    window.__supabaseResolve = resolve;
+    window.__supabaseReject  = reject;
+  });
+</script>
+<script type="module">
+  try {
+    const mod = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
+    window.__supabaseCreateClient = mod.createClient;
+    window.__supabaseResolve(mod.createClient);
+    if (window.__diag) window.__diag('✓ lib: supabase-js@2');
+  } catch (e) {
+    window.__supabaseReject(e);
+    if (window.__diag) window.__diag('✗ lib: supabase-js (' + e.message + ')');
+  }
+</script>
+
 <!--
   ============================================================
-  ECO-SENTINEL · Prototipo Funcional · Fase 0 · v0.8.0
-  STEP-001 a STEP-008
+  ECO-COMPLAINT · Prototipo Funcional · Fase 0 · v0.9.0
+  STEP-001 a STEP-010 (Fase 0 cerrada)
   Marco normativo: Ley 2111 de 2021 (Colombia) · ISO 31000:2018
-  Sistema visual: Brote
-  Última edición: Mayo 10, 2026
+  Sistema visual: Brote · Light mode only (ADR-07)
+  Arquitectura: Single-file HTML hasta Fase 3 (ADR-01)
+  Última edición: Mayo 11, 2026
   ============================================================
-  Esta entrega contiene STEPs 001+002:
-  · Sistema de diseño Brote, router, store, bus, auditoría
-  · Motor del árbol de decisión (10 nodos · 23 rutas terminales)
-  · Catálogo de 18 delitos con severidades (Sec. 3.4 del análisis)
-  · Modo invitado (denuncia anónima sin login)
-  · Sistema i18n preparado para multi-idioma
-  · Skeletons de carga
-  · Focus management (Esc, focus trap)
-  · Resumen de delitos identificados con severidad ancla
+  Hitos cubiertos en Fase 0:
+  · STEP-001 · Shell: persistencia, store, bus, auditoría, router, auth
+  · STEP-002 · Árbol jurídico (10 nodos · 23 rutas · 18 delitos)
+  · STEP-003 · Probabilidad CONESA + Risk + Authorities + Matriz 5×5
+  · STEP-004 · Ubicación (GPS/Mapa/Texto) + Evidencias + Revisión + Envío
+  · STEP-005 · Dashboard admin completo (KPIs, charts, heatmap, drawer)
+  · STEP-006 · PDF formal con jsPDF + galería + hotfixes Safari iOS
+  · STEP-007 · Páginas públicas /consulta y /contacto (privacy by design)
+  · STEP-008 · QR + Clipboard + relativeTime + PublicStats en home
+  · STEP-009 · Memoria técnica de Fase 0 (anexo de tesis)
+  · STEP-010 · URL QR dinámica + Open Graph + PWA-lite + rate limit + copy
+  Siguiente: Fase 1 · Backend mínimo (Firebase Auth + Firestore)
 -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -250,6 +323,74 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .container-narrow { max-width: var(--w-narrow); margin: 0 auto; padding: var(--s-8); }
 
 /* ============================================================
+   5b · BACKEND BANNER · STEP-101 (estado de conexión Supabase)
+   ============================================================ */
+.backend-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9000;
+  padding: 10px var(--s-5);
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  font-size: 13px; font-weight: 500; font-family: var(--font-body);
+  box-shadow: var(--sh-1);
+  animation: viewIn 200ms ease forwards;
+}
+.backend-banner[data-state="connecting"] {
+  background: var(--bg-subtle); color: var(--text-soft);
+  border-bottom: 1px solid var(--line);
+}
+.backend-banner[data-state="waking"] {
+  background: var(--warm-soft); color: #6D4A14;
+  border-bottom: 2px solid var(--warm);
+}
+.backend-banner[data-state="error"] {
+  background: var(--alarm-soft); color: var(--alarm);
+  border-bottom: 2px solid var(--alarm);
+}
+.backend-banner strong { font-weight: 700; }
+.backend-banner .bb-detail { opacity: 0.7; font-size: 11px; font-family: var(--font-mono); }
+.backend-banner .bb-icon { font-weight: 700; font-size: 16px; }
+.bb-spinner {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: bb-spin 800ms linear infinite;
+}
+@keyframes bb-spin { to { transform: rotate(360deg); } }
+.bb-retry {
+  background: white; border: 1.5px solid currentColor; color: inherit;
+  padding: 3px 12px; border-radius: var(--r-pill); font-size: 12px;
+  cursor: pointer; font-family: var(--font-body); font-weight: 600;
+  margin-left: auto;
+  transition: background 0.15s, color 0.15s;
+}
+.bb-retry:hover { background: currentColor; color: white; }
+.bb-retry:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Tarjeta de estado del backend en /admin/config */
+.backend-status-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+.backend-status-cell {
+  padding: var(--s-3) var(--s-4); background: var(--bg-subtle);
+  border-radius: var(--r-md); border: 1px solid var(--line);
+}
+.backend-status-cell .lbl {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); margin-bottom: 4px;
+}
+.backend-status-cell .val { font-size: 14px; color: var(--text); }
+.backend-status-pill {
+  display: inline-block; padding: 3px 10px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600; font-family: var(--font-body);
+}
+.backend-status-pill[data-cls="soft"] { background: var(--bg-subtle); color: var(--text-soft); border: 1px solid var(--line); }
+.backend-status-pill[data-cls="warm"] { background: var(--warm-soft); color: #6D4A14; border: 1px solid var(--warm); }
+.backend-status-pill[data-cls="ok"]   { background: var(--brand-soft); color: var(--brand-deep); border: 1px solid var(--brand); }
+.backend-status-pill[data-cls="err"]  { background: var(--alarm-soft); color: var(--alarm); border: 1px solid var(--alarm); }
+@media (max-width: 720px) {
+  .backend-status-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============================================================
    6 · LANDING
    ============================================================ */
 .landing {
@@ -319,6 +460,49 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   transition: all 120ms;
 }
 .auth-demo button:hover { border-color: var(--brand); color: var(--brand-deep); }
+
+/* Auth tabs + panes (STEP-102) */
+.auth-tabs {
+  display: flex; gap: 2px; margin: calc(var(--s-5) * -1) calc(var(--s-5) * -1) var(--s-6);
+  padding: 4px; background: var(--bg-subtle); border-radius: var(--r-md);
+}
+.auth-tab {
+  flex: 1; padding: 8px 12px; background: transparent; border: none;
+  border-radius: var(--r-sm); font-family: var(--font-body);
+  font-size: 14px; font-weight: 600; color: var(--text-soft);
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.auth-tab:hover { color: var(--text); }
+.auth-tab.active {
+  background: var(--bg-card); color: var(--brand-deep);
+  box-shadow: var(--sh-1);
+}
+.auth-tab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.auth-pane { display: none; }
+.auth-pane.active { display: block; animation: viewIn 200ms ease forwards; }
+.auth-pane > p { color: var(--text-soft); margin-bottom: var(--s-6); }
+.auth-info {
+  margin-top: var(--s-4); padding: var(--s-3) var(--s-4);
+  background: var(--brand-tint); border-left: 3px solid var(--brand);
+  border-radius: var(--r-sm); color: var(--brand-deep);
+  font-size: 13px; line-height: 1.5;
+}
+.auth-info.error {
+  background: var(--alarm-soft); border-color: var(--alarm); color: var(--alarm);
+}
+.auth-backend-info {
+  margin-top: var(--s-4); padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm); font-size: 11px; font-family: var(--font-mono);
+  text-align: center;
+}
+.auth-backend-info[data-mode="supabase"] {
+  background: var(--brand-tint); color: var(--brand-deep);
+  border: 1px solid var(--brand-soft);
+}
+.auth-backend-info[data-mode="local"] {
+  background: var(--warm-soft); color: #6D4A14;
+  border: 1px solid var(--warm);
+}
 
 /* ============================================================
    8 · CITIZEN · vista común (MIS DENUNCIAS, EMPTY STATE)
@@ -991,6 +1175,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   background: var(--bg-card);
 }
 .drawer-body { padding: var(--s-5) var(--s-6); flex: 1; }
+.drawer-rad-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px dashed var(--line);
+  border-radius: var(--r-sm); padding: 3px 8px;
+  font-size: 13px; color: var(--text-soft); cursor: pointer;
+  margin-bottom: 4px; font-family: var(--font-body);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.drawer-rad-btn:hover { background: var(--brand-tint); color: var(--brand-deep); border-color: var(--brand-soft); }
+.drawer-rad-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.drawer-rad-btn.copied {
+  background: var(--brand-soft); color: var(--brand-deep);
+  border-style: solid; border-color: var(--brand);
+}
 .drawer-section {
   padding: var(--s-4) 0; border-bottom: 1px solid var(--line);
 }
@@ -1363,6 +1561,29 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   text-transform: uppercase; letter-spacing: 0.08em;
   margin-bottom: 4px;
 }
+.consulta-radicado-actions {
+  display: flex; gap: var(--s-2); margin-top: var(--s-3); flex-wrap: wrap;
+}
+.action-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--line);
+  border-radius: var(--r-pill); padding: 5px 11px;
+  font-size: 12px; font-weight: 600; color: var(--text-soft);
+  font-family: var(--font-body); cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.action-chip:hover {
+  background: var(--brand-tint); color: var(--brand-deep);
+  border-color: var(--brand-soft);
+}
+.action-chip:focus-visible {
+  outline: 2px solid var(--brand); outline-offset: 2px;
+}
+.action-chip.copied {
+  background: var(--brand-soft); color: var(--brand-deep);
+  border-color: var(--brand);
+}
+.action-chip svg { flex-shrink: 0; }
 .consulta-status-hero {
   display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap;
   padding: var(--s-5); border-radius: var(--r-md);
@@ -1951,31 +2172,90 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     </div>
   </section>
 
-  <!-- LOGIN -->
+  <!-- LOGIN · pestañas login/signup + recuperar contraseña (STEP-102) -->
   <section class="view" id="view-login" data-route="/iniciar-sesion">
     <div class="auth">
       <div class="auth-card">
-        <h2>Iniciar sesión</h2>
-        <p>Ingresa para gestionar tus denuncias o, si eres autoridad, para acceder al panel administrativo.</p>
-        <form class="auth-form" id="login-form" novalidate>
-          <div>
-            <label class="label" for="login-email">Correo electrónico</label>
-            <input class="input" type="email" id="login-email" placeholder="tu@correo.com" required autocomplete="email">
-          </div>
-          <div>
-            <label class="label" for="login-pass">Contraseña</label>
-            <input class="input" type="password" id="login-pass" placeholder="••••••••" required autocomplete="current-password">
-          </div>
-          <div class="auth-actions">
-            <button type="submit" class="btn btn-primary btn-lg">Entrar</button>
-            <a href="#/" class="btn btn-ghost">Volver al inicio</a>
-          </div>
-        </form>
-        <div class="auth-foot">
-          ¿Sin cuenta? Puedes <a href="#/denunciar">denunciar como invitado</a> o crear una cuenta en cualquier momento.
+        <div class="auth-tabs" role="tablist">
+          <button class="auth-tab active" type="button" role="tab" data-auth-tab="login" aria-selected="true">Iniciar sesión</button>
+          <button class="auth-tab"        type="button" role="tab" data-auth-tab="signup" aria-selected="false">Crear cuenta</button>
         </div>
-        <div class="auth-demo">
-          <strong>Cuentas de demostración (Fase 0)</strong>
+
+        <!-- PANE: LOGIN -->
+        <div class="auth-pane active" data-auth-pane="login" role="tabpanel">
+          <p>Ingresa para gestionar tus denuncias o, si eres autoridad, para acceder al panel administrativo.</p>
+          <form class="auth-form" id="login-form" novalidate>
+            <div>
+              <label class="label" for="login-email">Correo electrónico</label>
+              <input class="input" type="email" id="login-email" placeholder="tu@correo.com" required autocomplete="email">
+            </div>
+            <div>
+              <label class="label" for="login-pass">Contraseña</label>
+              <input class="input" type="password" id="login-pass" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <div class="auth-actions">
+              <button type="submit" class="btn btn-primary btn-lg" id="login-submit">Entrar</button>
+              <a href="#/" class="btn btn-ghost">Volver al inicio</a>
+            </div>
+          </form>
+          <div class="auth-foot">
+            <a href="#" data-auth-switch="forgot">¿Olvidaste tu contraseña?</a> ·
+            <a href="#/denunciar">Denunciar como invitado</a>
+          </div>
+        </div>
+
+        <!-- PANE: SIGNUP -->
+        <div class="auth-pane" data-auth-pane="signup" role="tabpanel">
+          <p>Crea una cuenta para hacer seguimiento de tus denuncias desde cualquier dispositivo. La denuncia siempre puede ser anónima — la cuenta es opcional.</p>
+          <form class="auth-form" id="signup-form" novalidate>
+            <div>
+              <label class="label" for="signup-name">Tu nombre</label>
+              <input class="input" type="text" id="signup-name" placeholder="Cómo te llamamos" autocomplete="name">
+            </div>
+            <div>
+              <label class="label" for="signup-email">Correo electrónico</label>
+              <input class="input" type="email" id="signup-email" placeholder="tu@correo.com" required autocomplete="email">
+            </div>
+            <div>
+              <label class="label" for="signup-pass">Contraseña</label>
+              <input class="input" type="password" id="signup-pass" placeholder="Mínimo 6 caracteres" required autocomplete="new-password">
+            </div>
+            <div>
+              <label class="label" for="signup-pass2">Confirmar contraseña</label>
+              <input class="input" type="password" id="signup-pass2" placeholder="Repítela" required autocomplete="new-password">
+            </div>
+            <div class="auth-actions">
+              <button type="submit" class="btn btn-primary btn-lg" id="signup-submit">Crear cuenta</button>
+              <button type="button" class="btn btn-ghost" data-auth-switch="login">Ya tengo cuenta</button>
+            </div>
+          </form>
+          <div class="auth-foot soft" style="font-size: 12px">
+            Al crear una cuenta aceptas que tus denuncias queden asociadas a tu identidad verificada (correo electrónico). Tus datos personales no se publican en la consulta pública.
+          </div>
+        </div>
+
+        <!-- PANE: FORGOT PASSWORD -->
+        <div class="auth-pane" data-auth-pane="forgot" role="tabpanel">
+          <h3 style="margin: 0 0 8px">Recuperar contraseña</h3>
+          <p>Ingresa el correo de tu cuenta. Te enviaremos un enlace para restablecer la contraseña.</p>
+          <form class="auth-form" id="forgot-form" novalidate>
+            <div>
+              <label class="label" for="forgot-email">Correo electrónico</label>
+              <input class="input" type="email" id="forgot-email" placeholder="tu@correo.com" required autocomplete="email">
+            </div>
+            <div class="auth-actions">
+              <button type="submit" class="btn btn-primary" id="forgot-submit">Enviar instrucciones</button>
+              <button type="button" class="btn btn-ghost" data-auth-switch="login">Volver</button>
+            </div>
+          </form>
+          <div id="forgot-info" class="auth-info" style="display: none"></div>
+        </div>
+
+        <!-- Indicador de backend activo + cuentas demo (visible solo en modo local) -->
+        <div class="auth-backend-info" id="auth-backend-info"></div>
+
+        <div class="auth-demo" id="auth-demo-block">
+          <strong>Cuentas de demostración</strong>
           Ingresa con un click para probar el sistema:
           <div class="spacer-2"></div>
           <button type="button" data-demo="ciudadano">maria@demo.co · ciudadano</button>
@@ -2547,6 +2827,395 @@ const Audit = {
   }
 };
 
+/* === D-bis · BACKEND · capa de abstracción cliente (STEP-101 · Fase 1) ====
+   Permite coexistir localStorage (Fase 0) y Supabase (Fase 1) durante la
+   migración progresiva. Si las constantes window.__SUPABASE_URL/ANON_KEY
+   son placeholder, el módulo se queda en modo localStorage y NO intenta
+   conectarse. El cliente Supabase se crea de manera lazy (la primera vez
+   que se necesita) porque el SDK carga como módulo ESM async. */
+const Backend = {
+  _config: null,
+  _client: null,
+  _status: 'idle',         /* idle | connecting | waking | ready | error */
+  _lastDurationMs: 0,
+  _lastError: null,
+
+  init() {
+    this._config = this._readConfig();
+    if (this._isPlaceholder()) {
+      console.info('%c[Backend] Modo localStorage · credenciales Supabase placeholder', 'color:#8A9590');
+      this._status = 'idle';
+      return;
+    }
+    console.info('%c[Backend] Modo Supabase · ' + this._config.url, 'color:#2EAA70;font-weight:600');
+    Audit.log('backend_init', 'system', null, { mode: 'supabase', url: this._config.url });
+  },
+
+  isSupabase()    { return !this._isPlaceholder(); },
+  isLocalStorage(){ return  this._isPlaceholder(); },
+  status()        { return this._status; },
+  lastDuration()  { return this._lastDurationMs; },
+  config()        { return this._config; },
+
+  /* Cliente Supabase lazy. Espera el SDK si aún no terminó de cargar.
+     Devuelve null si estamos en modo localStorage o si el SDK falló. */
+  async client() {
+    if (this._client) return this._client;
+    if (this._isPlaceholder()) return null;
+    if (!window.__supabaseReady) return null;
+    try {
+      const createClient = await window.__supabaseReady;
+      this._client = createClient(this._config.url, this._config.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+      return this._client;
+    } catch (e) {
+      console.error('[Backend] no se pudo crear cliente:', e);
+      this._lastError = e.message;
+      return null;
+    }
+  },
+
+  /* Ping ligero al endpoint REST de Supabase. No requiere el SDK cargado
+     porque hace fetch directo: detecta cold-start incluso si el module
+     está bajando todavía. Si tarda más de 2s, escala el banner a "waking".
+     Códigos 200/401/404 cuentan como "server vivo" (el 401 es por falta
+     de tabla, no por servidor caído). */
+  async wakeup() {
+    if (!this.isSupabase()) {
+      this._status = 'ready';
+      return { ok: true, skipped: true };
+    }
+    this._status = 'connecting';
+    BackendBanner.show('connecting');
+    const t0 = Date.now();
+    const escalate = setTimeout(() => {
+      if (this._status === 'connecting') {
+        this._status = 'waking';
+        BackendBanner.show('waking');
+      }
+    }, 2000);
+    try {
+      const controller = new AbortController();
+      const killer = setTimeout(() => controller.abort(), 60000);
+      const r = await fetch(this._config.url + '/rest/v1/', {
+        method: 'HEAD',
+        headers: {
+          apikey: this._config.anonKey,
+          Authorization: 'Bearer ' + this._config.anonKey
+        },
+        signal: controller.signal
+      });
+      clearTimeout(killer);
+      clearTimeout(escalate);
+      const duration = Date.now() - t0;
+      this._lastDurationMs = duration;
+      const ok = r.ok || r.status === 401 || r.status === 404;
+      if (ok) {
+        this._status = 'ready';
+        this._lastError = null;
+        BackendBanner.hide();
+      } else {
+        this._status = 'error';
+        this._lastError = 'HTTP ' + r.status;
+        BackendBanner.show('error', 'HTTP ' + r.status);
+      }
+      Audit.log('backend_wakeup', 'system', null, { ok, duration, status: r.status });
+      return { ok, duration, status: r.status };
+    } catch (e) {
+      clearTimeout(escalate);
+      const duration = Date.now() - t0;
+      this._lastDurationMs = duration;
+      this._status = 'error';
+      this._lastError = e.message || String(e);
+      BackendBanner.show('error', this._lastError);
+      Audit.log('backend_wakeup', 'system', null, { ok: false, duration, error: this._lastError });
+      return { ok: false, duration, error: this._lastError };
+    }
+  },
+
+  _readConfig() {
+    const stored = Persist.get('config.backend');
+    if (stored && stored.url && stored.anonKey) return stored;
+    return {
+      type: 'supabase',
+      url:     window.__SUPABASE_URL     || 'TU_SUPABASE_URL',
+      anonKey: window.__SUPABASE_ANON_KEY || 'TU_SUPABASE_ANON_KEY'
+    };
+  },
+
+  _isPlaceholder() {
+    const c = this._config;
+    if (!c || !c.url || !c.anonKey) return true;
+    if (typeof c.url !== 'string' || typeof c.anonKey !== 'string') return true;
+    if (c.url.indexOf('TU_SUPABASE') !== -1) return true;
+    if (c.anonKey.indexOf('TU_SUPABASE') !== -1) return true;
+    if (!c.url.startsWith('http')) return true;
+    return false;
+  }
+};
+
+/* Banner sticky de estado del backend. Tres estados:
+   - connecting: ping en curso (<2s, gris discreto)
+   - waking:     cold-start detectado (>2s, ámbar, instrucción explícita)
+   - error:      sin respuesta del servidor (rojo, con reintentar)
+   Es responsabilidad del módulo Backend orquestar los show()/hide(). */
+const BackendBanner = {
+  el: null,
+  ensure() {
+    if (this.el) return;
+    const div = document.createElement('div');
+    div.id = 'backend-banner';
+    div.className = 'backend-banner';
+    div.setAttribute('role', 'status');
+    div.setAttribute('aria-live', 'polite');
+    div.style.display = 'none';
+    document.body.appendChild(div);
+    this.el = div;
+  },
+  show(state, detail) {
+    this.ensure();
+    const e = this.el;
+    e.dataset.state = state;
+    let html = '';
+    if (state === 'connecting') {
+      html = '<span class="bb-spinner" aria-hidden="true"></span>' +
+             '<span>Conectando con el servidor…</span>';
+    } else if (state === 'waking') {
+      html = '<span class="bb-spinner" aria-hidden="true"></span>' +
+             '<strong>El servidor está despertando.</strong>' +
+             '<span>Puede tardar hasta 30 segundos. Tu sesión local sigue activa.</span>' +
+             '<button class="bb-retry" type="button">Reintentar</button>';
+    } else if (state === 'error') {
+      html = '<span class="bb-icon" aria-hidden="true">✗</span>' +
+             '<strong>No pudimos conectar al servidor.</strong>' +
+             (detail ? '<span class="bb-detail">(' + detail + ')</span>' : '') +
+             '<button class="bb-retry" type="button">Reintentar</button>';
+    }
+    e.innerHTML = html;
+    e.style.display = 'flex';
+    const retry = e.querySelector('.bb-retry');
+    if (retry) retry.onclick = () => Backend.wakeup();
+  },
+  hide() {
+    if (!this.el) return;
+    this.el.style.display = 'none';
+  }
+};
+
+/* === D-ter · REPOSITORIOS DE DATOS · STEP-104 (Fase 1) =================
+   Capa de repositorio sobre la persistencia. Permite migración
+   progresiva localStorage ↔ Supabase sin tocar los call-sites de
+   lectura existentes:
+
+   · Lecturas siguen yendo a Persist.get('reports') etc. (cache local).
+   · Escrituras pasan por el Repo, que: (a) escribe al backend activo,
+     (b) refresca el cache local cuando confirma el server.
+   · Si backend=supabase, init() llama Repo.refresh() para hidratar el
+     cache desde el server al arranque.
+   · Si backend=supabase, Repo.subscribe() abre un canal Realtime que
+     mantiene el cache en sync con cambios remotos en vivo.
+
+   Mapeo camelCase JS ↔ snake_case Postgres: lo hace _toRow / _fromRow. */
+
+const ReportsRepo = {
+  _channel: null,
+
+  /* Refresca el cache local desde el backend (solo Supabase).
+     Llamado en init() después de Auth.restore. En modo localStorage
+     es no-op porque el cache ES el storage primario. */
+  async refresh() {
+    if (!Backend.isSupabase()) return { ok: true, skipped: true };
+    const client = await Backend.client();
+    if (!client) return { ok: false, reason: 'no_client' };
+    try {
+      const { data, error } = await client
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      if (error) {
+        console.warn('[ReportsRepo.refresh]', error);
+        return { ok: false, reason: error.message };
+      }
+      const local = (data || []).map(this._fromRow);
+      Persist.set('reports', local);
+      Audit.log('reports_refresh', 'system', null, { count: local.length, backend: 'supabase' });
+      Bus.emit('reports:refreshed', local);
+      return { ok: true, count: local.length };
+    } catch (e) {
+      console.warn('[ReportsRepo.refresh] exception', e);
+      return { ok: false, reason: e.message };
+    }
+  },
+
+  /* Crea un report. En modo localStorage: append al array local
+     (lo que ya hacía Report.send). En modo Supabase: INSERT, y al
+     confirmar refresca el cache. Retorna el report tal cual quedó
+     (incluye id servidor y timestamps si es Supabase). */
+  async create(report) {
+    if (Backend.isSupabase()) {
+      const client = await Backend.client();
+      if (!client) throw new Error('Backend Supabase no disponible');
+      const row = this._toRow(report);
+      const { data, error } = await client.from('reports').insert(row).select().single();
+      if (error) throw new Error(this._friendlyError(error));
+      const saved = this._fromRow(data);
+      /* Append al cache local sin esperar a refresh */
+      const local = Persist.get('reports', []);
+      local.push(saved);
+      Persist.set('reports', local);
+      return saved;
+    }
+    /* localStorage */
+    const local = Persist.get('reports', []);
+    local.push(report);
+    Persist.set('reports', local);
+    return report;
+  },
+
+  /* Actualiza por radicado. Acepta patch parcial (status, etc.). */
+  async update(radicado, patch) {
+    if (Backend.isSupabase()) {
+      const client = await Backend.client();
+      if (!client) throw new Error('Backend Supabase no disponible');
+      const rowPatch = this._toRow(patch, /* partial */ true);
+      const { data, error } = await client
+        .from('reports').update(rowPatch).eq('radicado', radicado).select().single();
+      if (error) throw new Error(this._friendlyError(error));
+      const saved = this._fromRow(data);
+      /* Refresca cache local */
+      const local = Persist.get('reports', []);
+      const idx = local.findIndex(r => r.radicado === radicado);
+      if (idx !== -1) { local[idx] = Object.assign({}, local[idx], saved); Persist.set('reports', local); }
+      return saved;
+    }
+    /* localStorage */
+    const local = Persist.get('reports', []);
+    const idx = local.findIndex(r => r.radicado === radicado);
+    if (idx === -1) throw new Error('Report no encontrado: ' + radicado);
+    local[idx] = Object.assign({}, local[idx], patch);
+    Persist.set('reports', local);
+    return local[idx];
+  },
+
+  /* Lookup público (5 columnas, usado por PublicLookup en modo
+     Supabase). En localStorage se hace filter manual del array entero. */
+  async publicLookup(radicado) {
+    if (Backend.isSupabase()) {
+      const client = await Backend.client();
+      if (!client) return null;
+      const { data, error } = await client
+        .from('reports_public').select('*').eq('radicado', radicado).maybeSingle();
+      if (error || !data) return null;
+      return this._fromRow(data);
+    }
+    const local = Persist.get('reports', []);
+    const r = local.find(x => x.radicado === radicado);
+    if (!r) return null;
+    return {
+      radicado: r.radicado, delitos: r.delitos, band: r.band,
+      status: r.status, created_at: r.created_at
+    };
+  },
+
+  /* Suscripción Realtime — solo activa en modo Supabase. La callback
+     recibe ('INSERT'|'UPDATE'|'DELETE', record). Refresca el cache
+     local automáticamente y emite reports:realtime para que el admin
+     dashboard se actualice en vivo. */
+  async subscribe() {
+    if (!Backend.isSupabase()) return null;
+    if (this._channel) return this._channel;
+    const client = await Backend.client();
+    if (!client) return null;
+    this._channel = client
+      .channel('reports-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, (payload) => {
+        const local = Persist.get('reports', []);
+        const ev = payload.eventType;
+        if (ev === 'INSERT' || ev === 'UPDATE') {
+          const row = this._fromRow(payload.new);
+          const idx = local.findIndex(r => r.radicado === row.radicado);
+          if (idx === -1) local.push(row); else local[idx] = row;
+        } else if (ev === 'DELETE') {
+          const idx = local.findIndex(r => r.radicado === payload.old.radicado);
+          if (idx !== -1) local.splice(idx, 1);
+        }
+        Persist.set('reports', local);
+        Bus.emit('reports:realtime', { event: ev, record: payload.new || payload.old });
+      })
+      .subscribe();
+    return this._channel;
+  },
+
+  async unsubscribe() {
+    if (this._channel) {
+      const client = await Backend.client();
+      if (client) await client.removeChannel(this._channel);
+      this._channel = null;
+    }
+  },
+
+  /* Mapeo report JS → fila Postgres. Las columnas en SQL están en
+     snake_case; los campos JS están en camelCase / snake_case mixto
+     (legacy de Fase 0). _toRow normaliza ambas direcciones. */
+  _toRow(r, partial) {
+    const row = {};
+    if (r.radicado !== undefined)              row.radicado = r.radicado;
+    if (r.delitos !== undefined)               row.delitos = r.delitos;
+    if (r.severity !== undefined)              row.severity = r.severity;
+    if (r.probability !== undefined)           row.probability = r.probability;
+    if (r.probability_answers !== undefined)   row.probability_answers = r.probability_answers;
+    if (r.probabilityAnswers !== undefined)    row.probability_answers = r.probabilityAnswers;
+    if (r.score !== undefined)                 row.score = r.score;
+    if (r.band !== undefined)                  row.band = r.band;
+    if (r.location !== undefined)              row.location = r.location;
+    if (r.evidence !== undefined)              row.evidence = r.evidence;
+    if (r.reporter_description !== undefined)  row.reporter_description = r.reporter_description;
+    if (r.tree_path !== undefined)             row.tree_path = r.tree_path;
+    if (r.user_id !== undefined)               row.user_id = r.user_id;
+    if (r.is_anonymous !== undefined)          row.is_anonymous = r.is_anonymous;
+    if (r.authorities_notified !== undefined)  row.authorities_notified = r.authorities_notified;
+    if (r.master_email !== undefined)          row.master_email = r.master_email;
+    if (r.status !== undefined)                row.status = r.status;
+    if (r.created_at !== undefined && !partial) row.created_at = r.created_at;
+    return row;
+  },
+
+  /* Mapeo fila Postgres → report JS. Mantiene los nombres usados por
+     toda la app legacy (status, band, created_at, etc.). */
+  _fromRow(row) {
+    if (!row) return null;
+    return {
+      radicado:             row.radicado,
+      delitos:              row.delitos || [],
+      severity:             row.severity,
+      probability:          row.probability,
+      probability_answers:  row.probability_answers || [],
+      score:                row.score,
+      band:                 row.band,
+      location:             row.location || null,
+      evidence:             row.evidence || [],
+      reporter_description: row.reporter_description || '',
+      tree_path:            row.tree_path || [],
+      user_id:              row.user_id || null,
+      is_anonymous:         !!row.is_anonymous,
+      authorities_notified: row.authorities_notified || [],
+      master_email:         row.master_email || null,
+      status:               row.status || 'received',
+      created_at:           row.created_at
+    };
+  },
+
+  _friendlyError(err) {
+    const m = (err && err.message || '').toLowerCase();
+    if (m.includes('duplicate key')) return 'Ya existe una denuncia con ese radicado';
+    if (m.includes('row-level security')) return 'No tienes permisos para esa operación (RLS)';
+    if (m.includes('network')) return 'Error de red al guardar la denuncia';
+    return err.message || 'Error inesperado al guardar';
+  }
+};
+
 /* === E · I18N · sistema multi-idioma (mejora #4) ===
    Uso: I18n.t('tree.back')  o  I18n.t('tree.q', { n: 3 })
    Para Fase 1 se puede agregar 'en' al diccionario. */
@@ -2710,28 +3379,265 @@ const Focus = {
 };
 
 /* === G · AUTH === */
-const Auth = {
-  current()  { return Store.get().session; },
-  isAdmin()  { const s = this.current(); return s && s.role === 'admin'; },
-  login(email, password) {
+/* === G · AUTH · capa de autenticación dual (STEP-102) ====
+   Coexistencia LocalAuth (Fase 0 · cuentas demo en localStorage) y
+   SupabaseAuth (Fase 1 · supabase.auth con persistencia, verify email
+   y password reset). El wrapper Auth delega según Backend.isSupabase().
+   current() e isAdmin() siguen siendo SÍNCRONOS porque leen del Store
+   (que mantiene la sesión en memoria); los call-sites existentes no
+   se rompen. Los métodos que requieren red (login, logout, signUp,
+   requestPasswordReset, restore) son async. */
+
+const LocalAuth = {
+  async login(email, password) {
     const users = Persist.get('users', []);
     const u = users.find(x => x.email === email && x.password === password);
-    if (!u) { Audit.log('login_failed', 'session', null, { email }); return { ok: false, reason: 'Correo o contraseña no válidos' }; }
+    if (!u) {
+      Audit.log('login_failed', 'session', null, { email, backend: 'local' });
+      return { ok: false, reason: 'Correo o contraseña no válidos' };
+    }
     const session = { uid: u.uid, name: u.name, email: u.email, role: u.role, since: new Date().toISOString() };
     Persist.set('session', session);
     Store.set({ session });
-    Audit.log('login', 'session', u.uid, { role: u.role });
+    Audit.log('login', 'session', u.uid, { role: u.role, backend: 'local' });
     Bus.emit('auth:login', session);
     return { ok: true, session };
   },
-  logout() {
-    const s = this.current();
+
+  async logout() {
+    const s = Store.get().session;
     Persist.remove('session');
     Store.set({ session: null });
-    Audit.log('logout', 'session', s ? s.uid : null);
+    Audit.log('logout', 'session', s ? s.uid : null, { backend: 'local' });
     Bus.emit('auth:logout');
   },
-  restore() { const s = Persist.get('session'); if (s) Store.set({ session: s }); }
+
+  /* SignUp local: crea cuenta en eco.users (modo desarrollo).
+     En Fase 0 sirve si el desarrollador quiere agregar más usuarios
+     sin tocar el bootstrap; en Fase 1 con Supabase activo este método
+     no se llama (SupabaseAuth.signUp lo reemplaza). */
+  async signUp(email, password, name) {
+    if (!email || !password) return { ok: false, reason: 'Correo y contraseña son requeridos' };
+    if (password.length < 4)  return { ok: false, reason: 'Contraseña muy corta (mínimo 4 caracteres)' };
+    const users = Persist.get('users', []);
+    if (users.find(u => u.email === email)) return { ok: false, reason: 'Ya existe una cuenta con ese correo' };
+    const uid = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    const newUser = {
+      uid, email: email.toLowerCase(), password, name: name || email.split('@')[0],
+      role: 'ciudadano', createdAt: new Date().toISOString()
+    };
+    users.push(newUser);
+    Persist.set('users', users);
+    Audit.log('signup', 'session', uid, { backend: 'local' });
+    /* Login automático tras signup local */
+    return this.login(email, password);
+  },
+
+  async requestPasswordReset(email) {
+    /* Modo local: no enviamos email real, solo confirmamos visualmente.
+       En la vida real esto no resetea nada — es solo UI demo. */
+    const users = Persist.get('users', []);
+    const u = users.find(x => x.email === email);
+    Audit.log('password_reset_request', 'session', null, { email, found: !!u, backend: 'local' });
+    return { ok: true, info: 'Si la cuenta existe, recibirás instrucciones por correo. (modo demo: no se envía email real)' };
+  },
+
+  async restore() {
+    const s = Persist.get('session');
+    if (s) Store.set({ session: s });
+  }
+};
+
+const SupabaseAuth = {
+  _listenerInstalled: false,
+  _profileCache: {}, /* uid → { role, name } para evitar fetches repetidos */
+
+  async login(email, password) {
+    const client = await Backend.client();
+    if (!client) return { ok: false, reason: 'Backend Supabase no disponible. Verifica conexión en /admin/config.' };
+    try {
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) {
+        Audit.log('login_failed', 'session', null, { email, backend: 'supabase', err: error.message });
+        return { ok: false, reason: this._friendlyError(error) };
+      }
+      const session = await this._buildSession(data.user, data.session);
+      Store.set({ session });
+      Audit.log('login', 'session', session.uid, { role: session.role, backend: 'supabase' });
+      Bus.emit('auth:login', session);
+      this._installListener();
+      return { ok: true, session };
+    } catch (e) {
+      return { ok: false, reason: e.message || 'Error de red al iniciar sesión' };
+    }
+  },
+
+  async logout() {
+    const client = await Backend.client();
+    const s = Store.get().session;
+    if (client) {
+      try { await client.auth.signOut(); }
+      catch (e) { console.warn('[SupabaseAuth.logout]', e); }
+    }
+    Store.set({ session: null });
+    Audit.log('logout', 'session', s ? s.uid : null, { backend: 'supabase' });
+    Bus.emit('auth:logout');
+  },
+
+  async signUp(email, password, name) {
+    const client = await Backend.client();
+    if (!client) return { ok: false, reason: 'Backend Supabase no disponible' };
+    if (!email || !password) return { ok: false, reason: 'Correo y contraseña son requeridos' };
+    if (password.length < 6)  return { ok: false, reason: 'Contraseña muy corta (mínimo 6 caracteres)' };
+    try {
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name: name || email.split('@')[0] },
+          emailRedirectTo: location.origin + location.pathname + '#/iniciar-sesion'
+        }
+      });
+      if (error) {
+        Audit.log('signup_failed', 'session', null, { email, err: error.message });
+        return { ok: false, reason: this._friendlyError(error) };
+      }
+      Audit.log('signup', 'session', data.user ? data.user.id : null, { email, backend: 'supabase' });
+      /* Si Supabase está configurado con "Email confirmation" activada, data.session
+         es null hasta que confirme. Si está OFF (modo desarrollo), entra directo. */
+      if (data.session) {
+        const session = await this._buildSession(data.user, data.session);
+        Store.set({ session });
+        Bus.emit('auth:login', session);
+        return { ok: true, session, autoSignedIn: true };
+      }
+      return { ok: true, needsVerification: true, info: 'Te enviamos un correo de verificación a ' + email + '. Confirma para activar tu cuenta.' };
+    } catch (e) {
+      return { ok: false, reason: e.message || 'Error de red al crear la cuenta' };
+    }
+  },
+
+  async requestPasswordReset(email) {
+    const client = await Backend.client();
+    if (!client) return { ok: false, reason: 'Backend no disponible' };
+    try {
+      const { error } = await client.auth.resetPasswordForEmail(email, {
+        redirectTo: location.origin + location.pathname + '#/iniciar-sesion'
+      });
+      Audit.log('password_reset_request', 'session', null, { email, ok: !error, backend: 'supabase' });
+      if (error) return { ok: false, reason: this._friendlyError(error) };
+      return { ok: true, info: 'Si la cuenta existe, recibirás instrucciones por correo.' };
+    } catch (e) {
+      return { ok: false, reason: e.message || 'Error de red' };
+    }
+  },
+
+  async restore() {
+    const client = await Backend.client();
+    if (!client) return;
+    try {
+      const { data, error } = await client.auth.getSession();
+      if (error || !data.session) {
+        this._installListener();
+        return;
+      }
+      const session = await this._buildSession(data.session.user, data.session);
+      Store.set({ session });
+      Audit.log('session_restored', 'session', session.uid, { backend: 'supabase' });
+      Bus.emit('auth:login', session);
+      this._installListener();
+    } catch (e) {
+      console.warn('[SupabaseAuth.restore]', e);
+    }
+  },
+
+  /* Suscripción a cambios de auth (token refresh, signOut desde otra pestaña, etc.).
+     Se instala una sola vez. Mantiene Store.session sincronizado. */
+  async _installListener() {
+    if (this._listenerInstalled) return;
+    const client = await Backend.client();
+    if (!client) return;
+    this._listenerInstalled = true;
+    client.auth.onAuthStateChange(async (event, sbSession) => {
+      if (event === 'SIGNED_OUT' || !sbSession) {
+        if (Store.get().session) {
+          Store.set({ session: null });
+          Bus.emit('auth:logout');
+        }
+        return;
+      }
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const current = Store.get().session;
+        if (!current || current.uid !== sbSession.user.id) {
+          const session = await this._buildSession(sbSession.user, sbSession);
+          Store.set({ session });
+          Bus.emit('auth:login', session);
+        }
+      }
+    });
+  },
+
+  /* Construye el objeto session interno desde el user+session de Supabase.
+     Lee el rol desde la tabla users_profile (STEP-103). Si no existe (server
+     fresh sin schema aplicado), default a 'ciudadano'. */
+  async _buildSession(user, sbSession) {
+    let profile = this._profileCache[user.id];
+    if (!profile) {
+      profile = await this._loadProfile(user.id);
+      this._profileCache[user.id] = profile;
+    }
+    return {
+      uid:   user.id,
+      email: user.email,
+      name:  profile.name || (user.user_metadata && user.user_metadata.name) || user.email.split('@')[0],
+      role:  profile.role || 'ciudadano',
+      since: new Date().toISOString(),
+      verified: !!user.email_confirmed_at,
+      _supabase: { access_token: sbSession.access_token, expires_at: sbSession.expires_at }
+    };
+  },
+
+  async _loadProfile(uid) {
+    const client = await Backend.client();
+    if (!client) return {};
+    try {
+      const { data, error } = await client.from('users_profile').select('role, name').eq('uid', uid).maybeSingle();
+      if (error || !data) return {};
+      return data;
+    } catch (e) {
+      console.warn('[SupabaseAuth._loadProfile]', e);
+      return {};
+    }
+  },
+
+  /* Mapea errores comunes de Supabase a mensajes humanos en español */
+  _friendlyError(err) {
+    const msg = (err && err.message || '').toLowerCase();
+    if (msg.includes('invalid login credentials')) return 'Correo o contraseña no válidos';
+    if (msg.includes('email not confirmed'))       return 'Confirma tu correo antes de iniciar sesión';
+    if (msg.includes('user already registered'))   return 'Ya existe una cuenta con ese correo';
+    if (msg.includes('password should be at least')) return 'La contraseña es demasiado corta';
+    if (msg.includes('rate limit'))                return 'Demasiados intentos. Espera unos minutos antes de reintentar.';
+    if (msg.includes('network'))                   return 'Error de red. Verifica tu conexión.';
+    return err.message || 'Error inesperado de autenticación';
+  }
+};
+
+const Auth = {
+  /* Accessors síncronos — leen del Store en memoria, los call-sites
+     existentes (UI, Router, render de vistas) no necesitan async/await. */
+  current() { return Store.get().session; },
+  isAdmin() { const s = this.current(); return s && s.role === 'admin'; },
+
+  /* Selector de implementación según el backend activo. */
+  _impl() { return Backend.isSupabase() ? SupabaseAuth : LocalAuth; },
+
+  /* Métodos que requieren red — async. Los call-sites se adaptan con await. */
+  async login(email, password)     { return this._impl().login(email, password); },
+  async logout()                    { return this._impl().logout(); },
+  async signUp(email, password, name) { return this._impl().signUp(email, password, name); },
+  async requestPasswordReset(email) { return this._impl().requestPasswordReset(email); },
+  async restore()                   { return this._impl().restore(); }
 };
 
 /* === H · ROUTER ===
@@ -2795,6 +3701,7 @@ const Router = {
     if (route.view === 'view-sent')           SentView.render();
     if (route.view === 'view-consulta')       PublicLookup.render();
     if (route.view === 'view-contacto')       Contact.render();
+    if (route.view === 'view-login')          UI.updateAuthBackendInfo();
 
     Store.set({ route: hash });
     Audit.log('navigate', 'route', hash);
@@ -3977,6 +4884,40 @@ const Outbox = {
 
 /* === I.13 · REPORT · generación de radicado y envío (STEP-004) === */
 const Report = {
+  /* Rate limit local · defensa de UX, no de seguridad real.
+     Fase 5 sustituye esto con Firebase App Check + reCAPTCHA (ver RSK-XX).
+     Reglas: máx 3 envíos en 5 min, máx 10 en 1 hora desde este navegador. */
+  RATE_LIMIT: {
+    windowShortMs: 5 * 60 * 1000,
+    windowLongMs:  60 * 60 * 1000,
+    maxShort: 3,
+    maxLong:  10
+  },
+
+  checkRateLimit() {
+    const cfg = this.RATE_LIMIT;
+    const now = Date.now();
+    let history = Persist.get('rate_limit', []) || [];
+    /* Purgar timestamps fuera de la ventana larga */
+    history = history.filter(ts => (now - ts) < cfg.windowLongMs);
+    const inShort = history.filter(ts => (now - ts) < cfg.windowShortMs).length;
+    if (inShort >= cfg.maxShort) {
+      throw new Error(
+        'Has enviado ' + cfg.maxShort + ' denuncias en los últimos 5 minutos. ' +
+        'Por seguridad esperamos unos minutos antes de aceptar otra. ' +
+        'Si es un error, contáctanos desde /contacto.'
+      );
+    }
+    if (history.length >= cfg.maxLong) {
+      throw new Error(
+        'Has alcanzado el límite de ' + cfg.maxLong + ' denuncias por hora ' +
+        'desde este dispositivo. Espera un poco o contáctanos.'
+      );
+    }
+    history.push(now);
+    Persist.set('rate_limit', history);
+  },
+
   generateRadicado(anchorArt) {
     const date = new Date();
     const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
@@ -3986,7 +4927,13 @@ const Report = {
     return `ECO-${yyyymmdd}-${anchorArt}-${seq4}`;
   },
 
-  send() {
+  /* Envío async · STEP-104 · ahora pasa por ReportsRepo que decide
+     localStorage vs Supabase según Backend.isSupabase(). El rate limit
+     y la generación de radicado siguen siendo locales (sin red).
+     Si la inserción en Supabase falla por RLS u otra razón, el error
+     burbujea al handler de la review que muestra Toast. */
+  async send() {
+    this.checkRateLimit();
     const draft = Persist.get('draft');
     if (!draft) throw new Error('No hay borrador');
     const delitos = Persist.get('delitos');
@@ -4029,12 +4976,12 @@ const Report = {
       status: 'received',
       created_at: new Date().toISOString()
     };
-    const reports = Persist.get('reports', []);
-    reports.push(report);
-    Persist.set('reports', reports);
+
+    /* Persistencia vía Repo · escribe al backend activo + refresca cache */
+    const saved = await ReportsRepo.create(report);
 
     /* Limpiar draft y guardar último radicado para vista de éxito */
-    Persist.set('last_sent_radicado', radicado);
+    Persist.set('last_sent_radicado', saved.radicado);
     Persist.remove('draft');
     Tree.state = null;
 
@@ -4207,11 +5154,14 @@ const Review = {
         cancelText: 'Cancelar'
       });
       if (!ok) return;
+      const sendBtn = document.getElementById('review-send-btn');
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
       try {
-        const report = Report.send();
+        await Report.send();
         Router.navigate('/denunciar/enviado');
       } catch (err) {
-        Toast.show('Error al enviar: ' + err.message, 'error');
+        Toast.show('Error al enviar: ' + (err.message || err), 'error');
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = I18n.t('rev.send'); }
       }
     };
     document.getElementById('rev-cancel-btn').onclick = () => Tree.cancel();
@@ -4540,6 +5490,16 @@ const PdfGen = {
     doc.setLineDashPattern([1.5, 1.5], 0);
     doc.roundedRect(MARGIN, y, CONTENT_W, 30, 2, 2, 'S');
     doc.setLineDashPattern([], 0);
+    /* URL pública del radicado para QR.
+       Se construye dinámicamente desde location.origin + pathname para que
+       funcione en GitHub Pages, dominio propio o cualquier despliegue http/https
+       sin requerir reconfiguración. Si el archivo se abre en file:// el QR se
+       omite (la URL no sería escaneable desde otro dispositivo). */
+    var qrTargetUrl = null;
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      qrTargetUrl = location.origin + location.pathname +
+        '#/consulta?radicado=' + encodeURIComponent(report.radicado);
+    }
     /* Texto del radicado */
     setColor(COLOR_SOFT);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
@@ -4549,14 +5509,20 @@ const PdfGen = {
     doc.text(report.radicado, MARGIN + 6, y + 17);
     setColor(COLOR_SOFT);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-    doc.text('Escanea el QR para consultar el estado actualizado', MARGIN + 6, y + 25);
-    /* QR del radicado (lleva al endpoint de consulta) */
-    try {
-      const qrTargetUrl = 'https://Eco-Complaint.app/#/consulta?radicado=' + encodeURIComponent(report.radicado);
-      const qrDataUrl = QRGen.toDataURL(qrTargetUrl, { size: 200 });
-      doc.addImage(qrDataUrl, 'PNG', PAGE_W - MARGIN - 26, y + 2, 26, 26);
-    } catch (e) {
-      console.warn('QR generation failed:', e);
+    doc.text(
+      qrTargetUrl
+        ? 'Escanea el QR para consultar el estado actualizado'
+        : 'Conserva este número para consultar el estado de tu denuncia',
+      MARGIN + 6, y + 25
+    );
+    /* QR del radicado (lleva al endpoint público de consulta) */
+    if (qrTargetUrl) {
+      try {
+        const qrDataUrl = QRGen.toDataURL(qrTargetUrl, { size: 200 });
+        doc.addImage(qrDataUrl, 'PNG', PAGE_W - MARGIN - 26, y + 2, 26, 26);
+      } catch (e) {
+        console.warn('QR generation failed:', e);
+      }
     }
     y += 36;
 
@@ -4944,7 +5910,11 @@ const PublicLookup = {
     }
   },
 
-  search() {
+  /* Consulta pública async · STEP-104.
+     En modo Supabase usa la VIEW reports_public (5 columnas, sin
+     ubicación/evidencias/descripción · ADR-06).
+     En modo localStorage filtra en cliente con la misma proyección. */
+  async search() {
     const input = document.getElementById('consulta-input');
     if (!input) return;
     const raw = input.value;
@@ -4953,12 +5923,21 @@ const PublicLookup = {
       Toast.show('Ingresa un número de radicado válido', 'error');
       return;
     }
-    const reports = Persist.get('reports', []);
-    const report = reports.find(r => r.radicado === radicado);
-    Audit.log('public_lookup', 'report', radicado, { found: !!report });
-
     const resultEl = document.getElementById('consulta-result');
     if (!resultEl) return;
+
+    /* Estado intermedio breve (skeleton inline) */
+    resultEl.innerHTML = '<div class="consulta-empty"><p class="muted">Consultando…</p></div>';
+
+    let report = null;
+    try {
+      report = await ReportsRepo.publicLookup(radicado);
+    } catch (e) {
+      Toast.show('Error consultando · ' + (e.message || e), 'error');
+      resultEl.innerHTML = '';
+      return;
+    }
+    Audit.log('public_lookup', 'report', radicado, { found: !!report, backend: Backend.isSupabase() ? 'supabase' : 'localStorage' });
 
     if (!report) {
       resultEl.innerHTML = `
@@ -4975,6 +5954,59 @@ const PublicLookup = {
     }
     /* Renderizar tarjeta de estado + timeline */
     resultEl.innerHTML = this.renderResult(report);
+    this.bindResultActions(report);
+  },
+
+  /* Botones de copia en la tarjeta de resultado: radicado + enlace público.
+     El enlace usa URL dinámica (location.origin + pathname) para que el
+     ciudadano pueda compartirlo y otro dispositivo lo abra directamente. */
+  bindResultActions(report) {
+    const flash = (btn) => {
+      btn.classList.add('copied');
+      const span = btn.querySelector('span');
+      const orig = span ? span.textContent : null;
+      if (span) span.textContent = '¡Copiado!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        if (span && orig) span.textContent = orig;
+      }, 1500);
+    };
+    const btnRad = document.getElementById('lookup-copy-rad');
+    if (btnRad) {
+      btnRad.onclick = () => {
+        Clipboard.copy(report.radicado).then(ok => {
+          if (ok) {
+            flash(btnRad);
+            Toast.show('Radicado copiado al portapapeles');
+            Audit.log('radicado_copy', 'report', report.radicado, { source: 'public_lookup' });
+          } else {
+            Toast.show('No se pudo copiar · selecciónalo manualmente', 'error');
+          }
+        });
+      };
+    }
+    const btnShare = document.getElementById('lookup-share-link');
+    if (btnShare) {
+      btnShare.onclick = () => {
+        let url;
+        if (location.protocol === 'http:' || location.protocol === 'https:') {
+          url = location.origin + location.pathname +
+                '#/consulta?radicado=' + encodeURIComponent(report.radicado);
+        } else {
+          /* file:// no es compartible; copiamos solo el radicado con sufijo informativo */
+          url = report.radicado + ' (abrir en Eco-Complaint y consultar)';
+        }
+        Clipboard.copy(url).then(ok => {
+          if (ok) {
+            flash(btnShare);
+            Toast.show('Enlace copiado · pégalo donde quieras compartirlo');
+            Audit.log('share_link_copy', 'report', report.radicado);
+          } else {
+            Toast.show('No se pudo copiar el enlace', 'error');
+          }
+        });
+      };
+    }
   },
 
   renderResult(report) {
@@ -5024,6 +6056,16 @@ const PublicLookup = {
           <div>
             <div class="consulta-radicado-label">Radicado</div>
             <div class="consulta-radicado-num">${report.radicado}</div>
+            <div class="consulta-radicado-actions">
+              <button class="action-chip" type="button" id="lookup-copy-rad" aria-label="Copiar número de radicado">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copiar radicado</span>
+              </button>
+              <button class="action-chip" type="button" id="lookup-share-link" aria-label="Copiar enlace de consulta">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                <span>Copiar enlace</span>
+              </button>
+            </div>
           </div>
           <span class="band-pill" data-band="${report.band}">${Risk.bandLabel(report.band)}</span>
         </div>
@@ -5655,7 +6697,10 @@ const Admin = {
       return `
         <div class="drawer-head">
           <div>
-            <div class="mono" style="font-size: 13px; color: var(--text-soft); margin-bottom: 4px">${r.radicado}</div>
+            <button class="drawer-rad-btn" id="drawer-rad-copy" type="button" title="Clic para copiar el radicado" aria-label="Copiar radicado ${r.radicado}">
+              <span class="mono">${r.radicado}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
             <h3 style="margin: 0">Detalle de denuncia</h3>
           </div>
           <div class="flex" style="gap: 8px">
@@ -5866,9 +6911,9 @@ const Admin = {
           </table>
         </div>
         <div class="step-placeholder" style="margin-top: var(--s-6)">
-          <code>Fase 1</code>
-          <h4>Migración a Firebase Auth</h4>
-          <p>En Fase 1 los usuarios se migran a Firebase Authentication con verificación de correo y recuperación de contraseña.</p>
+          <code>Fase 1 · STEP-102</code>
+          <h4>Migración a Supabase Auth</h4>
+          <p>En el siguiente STEP los usuarios se migran a Supabase Auth (Postgres + GoTrue) con verificación de correo, recuperación de contraseña y persistencia de sesión entre dispositivos. STEP-101 ya estableció la capa de abstracción <code>Backend</code>: revisa el estado de conexión en <a href="#/admin/config">/admin/config</a>.</p>
         </div>
       `;
     }
@@ -5882,10 +6927,64 @@ const Admin = {
       const contact = Persist.get('config.contact') || {};
       const bands = ['bajo', 'medio', 'alto', 'critico', 'extremo'];
 
+      const backendCfg = Backend.config();
+      const isSupa = Backend.isSupabase();
+      const statusLabels = {
+        idle:       { txt: 'En reposo',  cls: 'soft' },
+        connecting: { txt: 'Conectando', cls: 'warm' },
+        waking:     { txt: 'Despertando', cls: 'warm' },
+        ready:      { txt: 'Listo',      cls: 'ok'  },
+        error:      { txt: 'Error',      cls: 'err' }
+      };
+      const st = statusLabels[Backend.status()] || statusLabels.idle;
+
       root.innerHTML = `
         <div class="admin-content-head">
-          <div><h2>Configuración</h2><p>Correos de autoridades por banda, notificación maestra y datos públicos de contacto.</p></div>
+          <div><h2>Configuración</h2><p>Backend de datos, correos de autoridades por banda y datos públicos de contacto.</p></div>
           <div class="actions"><button class="btn btn-ghost btn-sm" id="cfg-reset-btn">Restaurar valores demo</button></div>
+        </div>
+
+        <div class="dash-card" id="cfg-backend-card">
+          <h4>Backend de datos · Fase 1</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 16px">
+            En Fase 1 las denuncias y cuentas se persisten en Supabase (Postgres + Auth).
+            Mientras las credenciales sigan como placeholder, la app funciona en modo
+            <strong>localStorage</strong> (solo en este navegador). Verifica la conexión
+            antes de una demo para evitar el cold-start de 10-30 s del plan gratuito.
+          </p>
+          <div class="backend-status-grid">
+            <div class="backend-status-cell">
+              <div class="lbl">Modo activo</div>
+              <div class="val"><strong>${isSupa ? 'Supabase' : 'localStorage (Fase 0)'}</strong></div>
+            </div>
+            <div class="backend-status-cell">
+              <div class="lbl">Estado</div>
+              <div class="val"><span class="backend-status-pill" data-cls="${st.cls}">${st.txt}</span></div>
+            </div>
+            <div class="backend-status-cell">
+              <div class="lbl">Último ping</div>
+              <div class="val mono">${Backend.lastDuration() ? Backend.lastDuration() + ' ms' : '—'}</div>
+            </div>
+            <div class="backend-status-cell" style="grid-column: 1 / -1">
+              <div class="lbl">URL del proyecto</div>
+              <div class="val mono" style="font-size: 12px; word-break: break-all">${backendCfg.url}</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap">
+            <button class="btn btn-soft btn-sm" id="cfg-backend-check" ${isSupa ? '' : 'disabled title="Configura las credenciales en window.__SUPABASE_URL / __SUPABASE_ANON_KEY"'}>
+              ⚡ Verificar conexión
+            </button>
+            <span id="cfg-backend-result" class="soft" style="font-size: 13px; align-self: center"></span>
+          </div>
+          ${!isSupa ? `
+            <div class="info-card-soft" style="margin-top: 12px">
+              <p style="font-size: 13px; margin: 0">
+                <strong>Credenciales placeholder detectadas.</strong> Para activar Supabase, edita las
+                dos líneas <code>window.__SUPABASE_URL</code> y <code>window.__SUPABASE_ANON_KEY</code>
+                en el <code>&lt;head&gt;</code> del HTML con los valores reales del Dashboard de Supabase
+                (Settings → API).
+              </p>
+            </div>` : ''}
         </div>
 
         <div class="dash-card">
@@ -5944,6 +7043,30 @@ const Admin = {
           <button class="btn btn-primary btn-lg" id="cfg-save-btn">💾 Guardar configuración</button>
         </div>
       `;
+
+      /* Handler "Verificar conexión" backend */
+      const backendCheckBtn = document.getElementById('cfg-backend-check');
+      if (backendCheckBtn) {
+        backendCheckBtn.onclick = async () => {
+          const resultEl = document.getElementById('cfg-backend-result');
+          backendCheckBtn.disabled = true;
+          const orig = backendCheckBtn.textContent;
+          backendCheckBtn.textContent = '⏳ Verificando…';
+          if (resultEl) resultEl.textContent = '';
+          const r = await Backend.wakeup();
+          backendCheckBtn.disabled = false;
+          backendCheckBtn.textContent = orig;
+          if (resultEl) {
+            if (r.ok) {
+              resultEl.innerHTML = `<span style="color: var(--brand-deep); font-weight: 600">✓ Conexión OK</span> · ${r.duration} ms`;
+            } else {
+              resultEl.innerHTML = `<span style="color: var(--alarm); font-weight: 600">✗ Falló</span> · ${r.error || ('HTTP ' + r.status)} · ${r.duration} ms`;
+            }
+          }
+          /* Re-render para refrescar pills de estado */
+          setTimeout(() => Admin.config.render(root), 1500);
+        };
+      }
 
       document.getElementById('cfg-save-btn').onclick = () => {
         const newCfg = { master_email: document.getElementById('cfg-master').value.trim() };
@@ -6161,19 +7284,40 @@ const Admin = {
     const pdfBtn = document.getElementById('drawer-pdf-btn');
     if (pdfBtn) pdfBtn.onclick = () => PdfGen.downloadReport(report);
 
+    /* Copy del radicado desde el drawer */
+    const radBtn = document.getElementById('drawer-rad-copy');
+    if (radBtn) {
+      radBtn.onclick = () => {
+        Clipboard.copy(report.radicado).then(ok => {
+          if (ok) {
+            radBtn.classList.add('copied');
+            setTimeout(() => radBtn.classList.remove('copied'), 1500);
+            Toast.show('Radicado copiado al portapapeles');
+            Audit.log('radicado_copy', 'report', report.radicado, { source: 'admin_drawer' });
+          } else {
+            Toast.show('No se pudo copiar', 'error');
+          }
+        });
+      };
+    }
+
     document.querySelectorAll('[data-set-status]').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const newStatus = btn.dataset.setStatus;
-        const reports = Persist.get('reports', []);
-        const r = reports.find(x => x.radicado === report.radicado);
-        if (r) {
-          r.status = newStatus;
-          Persist.set('reports', reports);
-          Audit.log('status_change', 'report', r.radicado, { from: report.status, to: newStatus });
+        const fromStatus = report.status;
+        btn.disabled = true;
+        try {
+          /* ReportsRepo decide localStorage vs Supabase. updated_at lo
+             actualiza el trigger Postgres (en localStorage no aplica). */
+          await ReportsRepo.update(report.radicado, { status: newStatus });
+          Audit.log('status_change', 'report', report.radicado, { from: fromStatus, to: newStatus });
           Toast.show(`Estado cambiado a "${Admin.statusLabel(newStatus)}"`);
           Admin.closeDrawer();
           const route = Store.get().route;
           if (route.startsWith('/admin/denuncias')) Admin.reports.renderTable();
+        } catch (err) {
+          Toast.show('No se pudo cambiar el estado: ' + (err.message || err), 'error');
+          btn.disabled = false;
         }
       };
     });
@@ -6308,6 +7452,38 @@ const UI = {
     banner.classList.toggle('hidden', !show);
   },
 
+  /* Cambia entre paneles de auth (login/signup/forgot). Activa pestaña
+     correspondiente sólo si existe (forgot no tiene pestaña, es link). */
+  switchAuthPane(name) {
+    document.querySelectorAll('.auth-tab').forEach(function(t) {
+      var active = t.dataset.authTab === name;
+      t.classList.toggle('active', active);
+      t.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('.auth-pane').forEach(function(p) {
+      p.classList.toggle('active', p.dataset.authPane === name);
+    });
+    /* Foco en el primer input del panel activo */
+    var active = document.querySelector('.auth-pane.active input');
+    if (active) active.focus();
+  },
+
+  /* Render del indicador de backend + visibilidad de cuentas demo en /iniciar-sesion */
+  updateAuthBackendInfo() {
+    var info = document.getElementById('auth-backend-info');
+    var demo = document.getElementById('auth-demo-block');
+    if (!info) return;
+    if (Backend.isSupabase()) {
+      info.dataset.mode = 'supabase';
+      info.textContent = '⚡ Backend: Supabase · cuentas reales';
+      if (demo) demo.style.display = 'none';
+    } else {
+      info.dataset.mode = 'local';
+      info.textContent = '◇ Backend: localStorage (Fase 0) · solo este navegador';
+      if (demo) demo.style.display = '';
+    }
+  },
+
   /* CTA del home: si hay sesión, no mostrar el botón "Iniciar sesión" (redundante) */
   updateLandingCTA() {
     const cta = document.getElementById('landing-cta');
@@ -6365,16 +7541,101 @@ function bindHandlers() {
     return el;
   }
 
-  /* Login */
+  /* Login form (async · STEP-102) */
   safe('login', function() {
     var f = $('login-form');
-    if (f) f.addEventListener('submit', function(e) {
+    if (!f) return;
+    f.addEventListener('submit', async function(e) {
       e.preventDefault();
+      var btn = $('login-submit');
       var email = $('login-email').value.trim().toLowerCase();
       var pass  = $('login-pass').value;
-      var r = Auth.login(email, pass);
-      if (r.ok) { Toast.show('Bienvenido, ' + r.session.name); Router.navigate(r.session.role === 'admin' ? '/admin' : '/denunciar'); }
-      else      { Toast.show(r.reason, 'error'); }
+      if (btn) { btn.disabled = true; var origTxt = btn.textContent; btn.textContent = 'Entrando…'; }
+      try {
+        var r = await Auth.login(email, pass);
+        if (r.ok) {
+          Toast.show('Bienvenido, ' + r.session.name);
+          Router.navigate(r.session.role === 'admin' ? '/admin' : '/denunciar');
+        } else {
+          Toast.show(r.reason, 'error');
+        }
+      } catch (err) {
+        Toast.show('Error inesperado: ' + (err.message || err), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = origTxt || 'Entrar'; }
+      }
+    });
+  });
+
+  /* Signup form (STEP-102) */
+  safe('signup', function() {
+    var f = $('signup-form');
+    if (!f) return;
+    f.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var btn = $('signup-submit');
+      var name  = ($('signup-name')  || {}).value || '';
+      var email = ($('signup-email') || {}).value.trim().toLowerCase();
+      var p1    = ($('signup-pass')  || {}).value || '';
+      var p2    = ($('signup-pass2') || {}).value || '';
+      if (p1 !== p2) { Toast.show('Las contraseñas no coinciden', 'error'); return; }
+      if (btn) { btn.disabled = true; var origTxt = btn.textContent; btn.textContent = 'Creando cuenta…'; }
+      try {
+        var r = await Auth.signUp(email, p1, name.trim());
+        if (!r.ok) { Toast.show(r.reason, 'error'); return; }
+        if (r.needsVerification) {
+          Toast.show(r.info, 'ok', 6000);
+          /* Vuelve al pane login para que el usuario espere y luego entre */
+          UI.switchAuthPane('login');
+          var em = $('login-email'); if (em) em.value = email;
+        } else if (r.autoSignedIn || r.session) {
+          Toast.show('Cuenta creada · ¡Bienvenido, ' + (r.session.name || email) + '!');
+          Router.navigate('/denunciar');
+        }
+      } catch (err) {
+        Toast.show('Error inesperado: ' + (err.message || err), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = origTxt || 'Crear cuenta'; }
+      }
+    });
+  });
+
+  /* Forgot password form (STEP-102) */
+  safe('forgot', function() {
+    var f = $('forgot-form');
+    if (!f) return;
+    f.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var btn = $('forgot-submit');
+      var info = $('forgot-info');
+      var email = ($('forgot-email') || {}).value.trim().toLowerCase();
+      if (!email) { Toast.show('Ingresa tu correo', 'error'); return; }
+      if (btn) { btn.disabled = true; var origTxt = btn.textContent; btn.textContent = 'Enviando…'; }
+      try {
+        var r = await Auth.requestPasswordReset(email);
+        if (info) {
+          info.style.display = 'block';
+          info.className = 'auth-info' + (r.ok ? '' : ' error');
+          info.textContent = r.ok ? r.info : r.reason;
+        }
+      } catch (err) {
+        if (info) { info.style.display = 'block'; info.className = 'auth-info error'; info.textContent = err.message; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = origTxt || 'Enviar instrucciones'; }
+      }
+    });
+  });
+
+  /* Auth tabs + switcher (STEP-102) */
+  safe('auth-tabs', function() {
+    document.querySelectorAll('[data-auth-tab]').forEach(function(b) {
+      b.addEventListener('click', function() { UI.switchAuthPane(b.dataset.authTab); });
+    });
+    document.querySelectorAll('[data-auth-switch]').forEach(function(b) {
+      b.addEventListener('click', function(e) {
+        e.preventDefault();
+        UI.switchAuthPane(b.dataset.authSwitch);
+      });
     });
   });
 
@@ -6437,7 +7698,7 @@ function bindHandlers() {
       var actionEl = e.target.closest && e.target.closest('[data-action]');
       if (actionEl) {
         var a = actionEl.dataset.action;
-        if (a === 'logout')       { Auth.logout(); Toast.show('Sesión cerrada'); Router.navigate('/'); }
+        if (a === 'logout')       { Auth.logout().then(function(){ Toast.show('Sesión cerrada'); Router.navigate('/'); }); }
         if (a === 'goto-mine')    { Router.navigate('/mis-denuncias'); }
         if (a === 'goto-profile') { Toast.show('Perfil llega en Fase 1'); }
         closeUserMenu();
@@ -6465,20 +7726,98 @@ function bindHandlers() {
 }
 
 /* === O · INIT === */
+/* Inyecta el Web App Manifest dinámicamente vía Blob URL.
+   Esto permite mantener single-file (ADR-01) sin un manifest.json externo.
+   Solo se activa si la página corre en http/https — en file:// el manifest
+   se descartaría y los iconos data-URI ya cubren favicon + apple-touch-icon. */
+function injectManifest() {
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+  if (typeof Blob === 'undefined' || !window.URL || !URL.createObjectURL) return;
+  try {
+    const iconSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23E0F3E8' rx='96'/%3E%3Cpath d='M256 96 C 160 144 144 256 144 320 C 144 384 192 432 256 432 C 320 432 368 384 368 320 C 368 256 352 144 256 96 Z' fill='%232EAA70'/%3E%3Cpath d='M256 144 L 256 416' stroke='%231F6F4A' stroke-width='14' stroke-linecap='round' fill='none'/%3E%3Cpath d='M256 240 Q 200 220 184 184' stroke='%231F6F4A' stroke-width='10' stroke-linecap='round' fill='none'/%3E%3Cpath d='M256 304 Q 312 284 328 248' stroke='%231F6F4A' stroke-width='10' stroke-linecap='round' fill='none'/%3E%3C/svg%3E";
+    const manifest = {
+      name: 'Eco-Complaint · Denuncia ambiental',
+      short_name: 'Eco-Complaint',
+      description: 'Plataforma ciudadana de denuncia de delitos ambientales (Colombia · Ley 2111/2021)',
+      lang: 'es-CO',
+      start_url: location.pathname + (location.search || ''),
+      scope: location.pathname,
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#F8FBF5',
+      theme_color: '#2EAA70',
+      icons: [
+        { src: iconSvg, sizes: 'any',     type: 'image/svg+xml', purpose: 'any maskable' },
+        { src: iconSvg, sizes: '192x192', type: 'image/svg+xml' },
+        { src: iconSvg, sizes: '512x512', type: 'image/svg+xml' }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = URL.createObjectURL(blob);
+    document.head.appendChild(link);
+  } catch (e) { console.warn('[injectManifest] falló:', e); }
+}
+
 function init() {
   function diag(m) { if (window.__diag) window.__diag(m); }
   try {
     diag('▸ init() inicio');
-    Persist.bootstrap();          diag('✓ Persist.bootstrap');
-    Auth.restore();                diag('✓ Auth.restore');
+    injectManifest();              diag('✓ injectManifest');
+    Persist.bootstrap();           diag('✓ Persist.bootstrap');
+    Backend.init();                diag('✓ Backend.init · ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'));
     bindHandlers();                diag('✓ bindHandlers');
     Router.init();                 diag('✓ Router.init · hash=' + (window.location.hash || '(vacío)'));
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.8.0', step: 'STEP-008' });
-    console.log('%cEco-Complaint · v0.8.0 · Mejoras UX (copy, QR, relativeTime, public stats)', 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.12.0', step: 'STEP-104' });
+    console.log('%cEco-Complaint · v0.12.0 · STEP-102+103+104 · Auth dual + Schema SQL + ReportsRepo · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
+
+    /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
+       NO bloquea el init — el primer paint usa Auth.current() que arranca
+       como null; cuando restore() termine, Bus emite auth:login y la UI
+       se refresca via updateNav/updateLandingCTA. */
+    Auth.restore().then(function() {
+      diag('✓ Auth.restore · ' + (Auth.current() ? Auth.current().email : 'sin sesión'));
+      UI.updateNav();
+      UI.updateLandingCTA();
+    });
+
+    /* Wakeup async no bloqueante + hidratación del cache de reports +
+       suscripción Realtime. Se encadena en una sola Promise para que
+       cada paso solo arranque si el anterior tuvo éxito. */
+    if (Backend.isSupabase()) {
+      Backend.wakeup()
+        .then(function(r) {
+          diag('wakeup · ' + (r.ok ? '✓ ' + r.duration + 'ms' : '✗ ' + (r.error || r.status)));
+          if (r.ok) return ReportsRepo.refresh();
+        })
+        .then(function(r) {
+          if (r && r.ok) diag('✓ ReportsRepo.refresh · ' + r.count + ' reports');
+          if (r && r.ok) return ReportsRepo.subscribe();
+        })
+        .then(function(ch) {
+          if (ch) diag('✓ Realtime suscrito · canal reports-watch');
+        })
+        .catch(function(e) { diag('✗ pipeline backend: ' + (e.message || e)); });
+    }
+
+    /* Cualquier cambio de sesión (login/logout/token refresh) refresca la UI */
+    Bus.on('auth:login',  function() { UI.updateNav(); UI.updateLandingCTA(); UI.updateGuestBanner(); });
+    Bus.on('auth:logout', function() { UI.updateNav(); UI.updateLandingCTA(); UI.updateGuestBanner(); });
+
+    /* Realtime: cuando llega un cambio remoto, re-renderiza la vista admin
+       activa si corresponde (dashboard o tabla de denuncias). */
+    Bus.on('reports:realtime', function(ev) {
+      const route = Store.get().route || '';
+      if (!route.startsWith('/admin')) return;
+      if (route === '/admin' || route === '/admin/denuncias') {
+        AdminViews.render(route === '/admin/denuncias' ? 'reports' : 'dashboard');
+      }
+    });
     if (!Persist.isAvailable()) {
       Toast.show('⚠ Modo memoria: los datos se perderán al recargar (Safari privado o sin localStorage)', 'error', 8000);
     }
@@ -6523,6 +7862,128 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.12.0 · STEP-102+103+104 · 2026-05-12 · Auth dual + Schema + Repo
+   STEP-102 · Auth dual (Local/Supabase)
+   + Renombrado el Auth monolítico de Fase 0 a LocalAuth (mantiene
+     cuentas demo en eco.users).
+   + Nuevo SupabaseAuth: signUp + signIn + signOut + getSession +
+     resetPasswordForEmail + onAuthStateChange. Lee el rol desde la
+     tabla users_profile (cache por uid). Manejo de errores comunes
+     traducidos al español (_friendlyError).
+   + Wrapper Auth que delega al backend activo. current() e isAdmin()
+     siguen sync para no romper los call-sites (leen del Store).
+     Métodos de red (login, logout, signUp, requestPasswordReset,
+     restore) ahora son async — call-sites adaptados.
+   + Vista /iniciar-sesion expandida: pestañas Login/Crear cuenta +
+     panel "Recuperar contraseña" (link desde login). Indicador de
+     backend activo (Supabase/localStorage). Cuentas demo ocultas en
+     modo Supabase.
+   + Handlers async con loading states (botón deshabilitado + texto
+     "Entrando…"/"Creando cuenta…"). Validaciones cliente: matching
+     de contraseña, longitud mínima.
+   + init(): Auth.restore() arranca async; Bus auth:login/logout
+     refresca UI. Subscription onAuthStateChange mantiene Store
+     sincronizado entre pestañas y tras token refresh.
+
+   STEP-103 · Schema SQL para Supabase (docs/fase-1-schema.sql)
+   + DDL completo: users_profile, reports, audit_log, config + índices.
+   + Triggers: handle_new_user (auto-perfil al signUp), update_updated_at
+     (mantiene timestamps frescos).
+   + Funciones helper: is_admin() con SECURITY DEFINER para usar en
+     policies sin bloqueo recursivo.
+   + RLS policies para los 4 escenarios: anon (solo INSERT reports +
+     SELECT reports_public), authenticated (sus reports), admin (todo).
+   + VIEW reports_public con solo 5 columnas (ADR-06 privacy by design
+     expresada a nivel SQL, más defendible que filtrar en cliente).
+   + Seeds: config singleton (authorities + contact + authorities_meta).
+   + Documentación inline: pasos de aplicación + smoke test + cómo
+     promover usuarios a admin + manejo de email confirmation.
+
+   STEP-104 · ReportsRepo (capa de repositorio)
+   + Módulo ReportsRepo: create(), update(), publicLookup(), refresh(),
+     subscribe(), unsubscribe(). Decide localStorage vs Supabase según
+     Backend.isSupabase().
+   + Patrón hybrid: las lecturas siguen sirviéndose del cache local
+     (Persist.get('reports')) — no hay que reescribir 20 call-sites.
+     Los writes pasan por el Repo, que escribe al backend y refresca
+     el cache local. En init() se llama refresh() para hidratar el
+     cache desde Supabase al arranque.
+   + Subscription Realtime via Postgres Changes: cuando llega INSERT/
+     UPDATE/DELETE remoto, el cache local se actualiza y Bus emite
+     reports:realtime; el admin dashboard se re-renderiza si está activo.
+   + Mapeo _toRow/_fromRow camelCase ↔ snake_case + tolerancia a la
+     mezcla legacy de Fase 0 (probabilityAnswers vs probability_answers).
+   + Errores comunes traducidos: duplicate key, RLS violation, network.
+   + Report.send() migrado: ahora async, llama ReportsRepo.create().
+     El handler de review-send-btn deshabilita el botón y muestra
+     "Enviando…" durante la espera.
+   + Admin drawer: cambio de estado migrado a ReportsRepo.update().
+   + PublicLookup.search() migrado a ReportsRepo.publicLookup() async
+     (usa la view reports_public en modo Supabase).
+
+   v0.10.0 · STEP-101 · 2026-05-11 · Fase 1 arranca · Backend Supabase
+   + SDK Supabase v2.45 cargado vía esm.sh como módulo ESM async (no
+     bloquea el parser ni el init). Promesa window.__supabaseReady se
+     resuelve cuando el SDK termina de bajar.
+   + Constantes globales window.__SUPABASE_URL / __SUPABASE_ANON_KEY
+     con placeholders en el <head>. Comentario inline explica que la
+     anon key es PÚBLICA por diseño y que la seguridad real viene de
+     las políticas RLS de Postgres (no de ocultar la key).
+   + Módulo Backend: capa de abstracción cliente con detección
+     automática de credenciales placeholder → fuerza modo localStorage
+     (Fase 0) sin intentar conectarse. El cliente Supabase se crea
+     lazy con persistSession + autoRefreshToken.
+   + Backend.wakeup(): ping HEAD a /rest/v1/ que NO requiere SDK
+     cargado. Detecta cold-start incluso si el módulo aún está
+     bajando. Status 200/401/404 = servidor vivo. Timeout 60s con
+     AbortController.
+   + Escalamiento automático del banner: si el ping pasa de 2s, el
+     estado cambia de "connecting" (gris discreto) a "waking" (ámbar
+     con instrucción visible al usuario). Si falla, "error" (rojo +
+     botón Reintentar). Audit log: backend_init, backend_wakeup.
+   + Módulo BackendBanner: sticky superior z-index 9000, 3 estados
+     accesibles (role=status, aria-live=polite), spinner CSS puro.
+   + Integración en init(): Backend.init() es sincrónico (solo lee
+     config). wakeup() se lanza async sin bloquear el render — el
+     usuario interactúa con vistas locales mientras el ping ocurre.
+   + Vista /admin/config: tarjeta nueva "Backend de datos · Fase 1"
+     en lo alto. Muestra modo activo, estado pill, último ping en ms
+     y URL del proyecto. Botón "⚡ Verificar conexión" deshabilitado
+     si credenciales son placeholder (con tooltip explicativo) y
+     activo cuando hay credenciales reales. Re-render automático
+     tras verificar para refrescar el pill de estado.
+   + CSS .backend-banner (connecting/waking/error con tokens del
+     sistema Brote) + .backend-status-grid responsivo.
+   + Vista /admin/usuarios: placeholder "Fase 1" actualizado de
+     Firebase Auth → Supabase Auth con link a /admin/config.
+
+   v0.9.0 · STEP-010 · 2026-05-11 · Cierre formal de Fase 0
+   + URL del QR ahora dinámica (location.origin + pathname) en lugar de
+     dominio ficticio hardcoded. En file:// se omite el QR y el texto
+     del recuadro cambia a "Conserva este número..." sin engañar.
+   + Open Graph + Twitter Card meta tags para previews al compartir en
+     WhatsApp/Twitter/Facebook. URL absoluta como placeholder con TODO
+     para actualizar al desplegar (GitHub Pages o dominio propio).
+   + Web App Manifest inyectado dinámicamente vía Blob URL en init()
+     (mantiene single-file · ADR-01). Permite "Add to Home Screen" en
+     Android Chrome.
+   + iOS Add to Home Screen: meta apple-mobile-web-app-capable + title +
+     status-bar-style + apple-touch-icon como data-URI SVG.
+   + Theme color #2EAA70 + favicon SVG inline con marca Brote.
+   + Rate limit local en Report.send: máx 3 envíos en 5 min, máx 10 por
+     hora desde este navegador. Mensajes de error user-friendly que
+     explican el motivo y dirigen a /contacto. Es defensa de UX, no de
+     seguridad real (Fase 5 hace lo segundo con Firebase App Check).
+   + Botón "Copiar radicado" en PublicLookup (tarjeta de resultado).
+   + Botón "Copiar enlace" en PublicLookup que copia URL absoluta de
+     consulta lista para compartir por WhatsApp/email.
+   + Botón "Copiar radicado" en Admin drawer (junto al número del reporte).
+   + CSS action-chip + drawer-rad-btn con estado .copied destacado.
+   + Auditoría: share_link_copy. Auditoría radicado_copy ahora distingue
+     source (sent_view, public_lookup, admin_drawer).
+   + Comment header actualizado: ECO-SENTINEL → ECO-COMPLAINT, versión
+     bumpeada a 0.9.0, lista completa de STEPs 001-010.
+
    v0.8.0 · STEP-008 · 2026-05-10 · Mejoras UX detectadas
    + Botón copy-to-clipboard del radicado en SentView (clickable, accesible)
    + Módulo Clipboard universal con fallback execCommand (Safari iOS antiguo)
