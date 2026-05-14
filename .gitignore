@@ -1,0 +1,45 @@
+# ============================================================
+# Eco-Complaint · .gitignore
+# ============================================================
+
+# --- SECRETOS ---
+# La contraseña de la DB de Supabase NUNCA debe ir al repo.
+# La anon key sí va (es pública por diseño + RLS).
+db.txt
+*.password
+*.secret
+.env
+.env.local
+.env.*.local
+
+# --- Herramientas locales ---
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Sistema operativo ---
+$RECYCLE.BIN/
+System Volume Information/
+
+# --- Backups y temporales ---
+*.bak
+*.tmp
+*.log
+*~
+index.html.bak
+index.html.orig
+
+# --- Build artifacts (preparado para Fase 4 con Vite) ---
+node_modules/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# --- PDFs generados localmente durante demos ---
+ECO-*.pdf
