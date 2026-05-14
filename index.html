@@ -3267,6 +3267,65 @@ const ReportsRepo = {
     if (!this._channel) return 'no suscrito';
     /* supabase-js expone _channel.state · CLOSED, JOINING, JOINED, LEAVING */
     return (this._channel.state || 'desconocido');
+  },
+
+  /* Mapeo report JS → fila Postgres. Las columnas en SQL están en
+     snake_case; los campos JS están en camelCase / snake_case mixto
+     (legacy de Fase 0). _toRow normaliza ambas direcciones. */
+  _toRow(r, partial) {
+    const row = {};
+    if (r.radicado !== undefined)              row.radicado = r.radicado;
+    if (r.delitos !== undefined)               row.delitos = r.delitos;
+    if (r.severity !== undefined)              row.severity = r.severity;
+    if (r.probability !== undefined)           row.probability = r.probability;
+    if (r.probability_answers !== undefined)   row.probability_answers = r.probability_answers;
+    if (r.probabilityAnswers !== undefined)    row.probability_answers = r.probabilityAnswers;
+    if (r.score !== undefined)                 row.score = r.score;
+    if (r.band !== undefined)                  row.band = r.band;
+    if (r.location !== undefined)              row.location = r.location;
+    if (r.evidence !== undefined)              row.evidence = r.evidence;
+    if (r.reporter_description !== undefined)  row.reporter_description = r.reporter_description;
+    if (r.tree_path !== undefined)             row.tree_path = r.tree_path;
+    if (r.user_id !== undefined)               row.user_id = r.user_id;
+    if (r.is_anonymous !== undefined)          row.is_anonymous = r.is_anonymous;
+    if (r.authorities_notified !== undefined)  row.authorities_notified = r.authorities_notified;
+    if (r.master_email !== undefined)          row.master_email = r.master_email;
+    if (r.status !== undefined)                row.status = r.status;
+    if (r.created_at !== undefined && !partial) row.created_at = r.created_at;
+    return row;
+  },
+
+  /* Mapeo fila Postgres → report JS. Mantiene los nombres usados por
+     toda la app legacy (status, band, created_at, etc.). */
+  _fromRow(row) {
+    if (!row) return null;
+    return {
+      radicado:             row.radicado,
+      delitos:              row.delitos || [],
+      severity:             row.severity,
+      probability:          row.probability,
+      probability_answers:  row.probability_answers || [],
+      score:                row.score,
+      band:                 row.band,
+      location:             row.location || null,
+      evidence:             row.evidence || [],
+      reporter_description: row.reporter_description || '',
+      tree_path:            row.tree_path || [],
+      user_id:              row.user_id || null,
+      is_anonymous:         !!row.is_anonymous,
+      authorities_notified: row.authorities_notified || [],
+      master_email:         row.master_email || null,
+      status:               row.status || 'received',
+      created_at:           row.created_at
+    };
+  },
+
+  _friendlyError(err) {
+    const m = (err && err.message || '').toLowerCase();
+    if (m.includes('duplicate key')) return 'Ya existe una denuncia con ese radicado';
+    if (m.includes('row-level security')) return 'No tienes permisos para esa operación (RLS)';
+    if (m.includes('network')) return 'Error de red al guardar la denuncia';
+    return err.message || 'Error inesperado al guardar';
   }
 };
 
@@ -3338,66 +3397,6 @@ const UsersRepo = {
       if (error) return { ok: false, error: error.message };
       return { ok: true, items: data || [] };
     } catch (e) { return { ok: false, error: e.message }; }
-  }
-};
-
-  /* Mapeo report JS → fila Postgres. Las columnas en SQL están en
-     snake_case; los campos JS están en camelCase / snake_case mixto
-     (legacy de Fase 0). _toRow normaliza ambas direcciones. */
-  _toRow(r, partial) {
-    const row = {};
-    if (r.radicado !== undefined)              row.radicado = r.radicado;
-    if (r.delitos !== undefined)               row.delitos = r.delitos;
-    if (r.severity !== undefined)              row.severity = r.severity;
-    if (r.probability !== undefined)           row.probability = r.probability;
-    if (r.probability_answers !== undefined)   row.probability_answers = r.probability_answers;
-    if (r.probabilityAnswers !== undefined)    row.probability_answers = r.probabilityAnswers;
-    if (r.score !== undefined)                 row.score = r.score;
-    if (r.band !== undefined)                  row.band = r.band;
-    if (r.location !== undefined)              row.location = r.location;
-    if (r.evidence !== undefined)              row.evidence = r.evidence;
-    if (r.reporter_description !== undefined)  row.reporter_description = r.reporter_description;
-    if (r.tree_path !== undefined)             row.tree_path = r.tree_path;
-    if (r.user_id !== undefined)               row.user_id = r.user_id;
-    if (r.is_anonymous !== undefined)          row.is_anonymous = r.is_anonymous;
-    if (r.authorities_notified !== undefined)  row.authorities_notified = r.authorities_notified;
-    if (r.master_email !== undefined)          row.master_email = r.master_email;
-    if (r.status !== undefined)                row.status = r.status;
-    if (r.created_at !== undefined && !partial) row.created_at = r.created_at;
-    return row;
-  },
-
-  /* Mapeo fila Postgres → report JS. Mantiene los nombres usados por
-     toda la app legacy (status, band, created_at, etc.). */
-  _fromRow(row) {
-    if (!row) return null;
-    return {
-      radicado:             row.radicado,
-      delitos:              row.delitos || [],
-      severity:             row.severity,
-      probability:          row.probability,
-      probability_answers:  row.probability_answers || [],
-      score:                row.score,
-      band:                 row.band,
-      location:             row.location || null,
-      evidence:             row.evidence || [],
-      reporter_description: row.reporter_description || '',
-      tree_path:            row.tree_path || [],
-      user_id:              row.user_id || null,
-      is_anonymous:         !!row.is_anonymous,
-      authorities_notified: row.authorities_notified || [],
-      master_email:         row.master_email || null,
-      status:               row.status || 'received',
-      created_at:           row.created_at
-    };
-  },
-
-  _friendlyError(err) {
-    const m = (err && err.message || '').toLowerCase();
-    if (m.includes('duplicate key')) return 'Ya existe una denuncia con ese radicado';
-    if (m.includes('row-level security')) return 'No tienes permisos para esa operación (RLS)';
-    if (m.includes('network')) return 'Error de red al guardar la denuncia';
-    return err.message || 'Error inesperado al guardar';
   }
 };
 
