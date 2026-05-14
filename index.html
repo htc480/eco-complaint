@@ -390,6 +390,45 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   .backend-status-grid { grid-template-columns: 1fr 1fr; }
 }
 
+/* Tarjetas del panel de diagnóstico · STEP-105 */
+.diag-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-3);
+}
+.diag-cell {
+  padding: var(--s-3) var(--s-4); background: var(--bg-subtle);
+  border-radius: var(--r-md); border: 1px solid var(--line);
+}
+.diag-cell .lbl {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); margin-bottom: 4px;
+}
+.diag-cell .val { font-size: 14px; color: var(--text); }
+@media (max-width: 960px) { .diag-grid { grid-template-columns: 1fr 1fr; } }
+
+.diag-counts {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-4);
+}
+.diag-count-card {
+  padding: var(--s-5); text-align: center;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.diag-count-card .num {
+  font-family: var(--font-display); font-size: 32px; font-weight: 700;
+  color: var(--brand-deep); line-height: 1;
+}
+.diag-count-card .lbl {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-soft);
+  margin-top: 8px;
+}
+.diag-count-card.diag-count-cache {
+  background: var(--bg-subtle); border-style: dashed;
+}
+.diag-count-card.diag-count-cache .num { color: var(--text-soft); }
+@media (max-width: 720px) {
+  .diag-counts { grid-template-columns: 1fr 1fr; }
+}
+
 /* ============================================================
    6 · LANDING
    ============================================================ */
@@ -2500,6 +2539,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
           Outbox
         </a>
+        <div class="admin-section-title">Backend · Fase 1</div>
+        <a class="admin-link" href="#/admin/diagnostico" data-admin-link="diagnostico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Diagnóstico
+        </a>
       </aside>
       <section class="admin-content" id="admin-content"></section>
     </div>
@@ -3156,6 +3200,147 @@ const ReportsRepo = {
     }
   },
 
+  /* ---- Métodos analíticos · STEP-105 ----
+     Consultas directas al server, NO usan el cache. Útiles para la
+     vista de diagnóstico (validar que el server tiene los datos que
+     el cliente espera). En modo localStorage delegan al cache local. */
+
+  async serverCount() {
+    if (!Backend.isSupabase()) {
+      return { ok: true, total: (Persist.get('reports', []) || []).length };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { count, error } = await client.from('reports')
+        .select('*', { count: 'exact', head: true });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, total: count || 0 };
+    } catch (e) { return { ok: false, error: e.message }; }
+  },
+
+  async serverRecent(limit) {
+    limit = limit || 5;
+    if (!Backend.isSupabase()) {
+      const list = Persist.get('reports', []) || [];
+      return { ok: true, items: list.slice(-limit).reverse() };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { data, error } = await client.from('reports')
+        .select('*').order('created_at', { ascending: false }).limit(limit);
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, items: (data || []).map(this._fromRow) };
+    } catch (e) { return { ok: false, error: e.message }; }
+  },
+
+  /* Distribución por banda computada en el server (GROUP BY). En modo
+     localStorage hace la misma agregación en cliente. */
+  async serverByBand() {
+    const bands = ['bajo', 'medio', 'alto', 'critico', 'extremo'];
+    if (!Backend.isSupabase()) {
+      const list = Persist.get('reports', []) || [];
+      const acc = { bajo: 0, medio: 0, alto: 0, critico: 0, extremo: 0 };
+      list.forEach(r => { if (acc[r.band] !== undefined) acc[r.band]++; });
+      return { ok: true, byBand: acc };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const acc = { bajo: 0, medio: 0, alto: 0, critico: 0, extremo: 0 };
+      /* Supabase JS no expone GROUP BY directo · hacemos un count por
+         banda en paralelo. Para volúmenes >10K se debería migrar a una
+         RPC SQL function (TODO Fase 4). */
+      await Promise.all(bands.map(async b => {
+        const { count, error } = await client.from('reports')
+          .select('*', { count: 'exact', head: true }).eq('band', b);
+        if (!error) acc[b] = count || 0;
+      }));
+      return { ok: true, byBand: acc };
+    } catch (e) { return { ok: false, error: e.message }; }
+  },
+
+  /* Estado de la subscription Realtime (para mostrar en diagnóstico) */
+  realtimeStatus() {
+    if (!Backend.isSupabase()) return 'n/a (localStorage)';
+    if (!this._channel) return 'no suscrito';
+    /* supabase-js expone _channel.state · CLOSED, JOINING, JOINED, LEAVING */
+    return (this._channel.state || 'desconocido');
+  }
+};
+
+/* === D-quad · AuditRepo (lectura del log desde Postgres · STEP-105) ===
+   Solo admin puede leer (policy audit_log_admin_read). La escritura sigue
+   ocurriendo localmente vía Audit.log() en localStorage; en STEP-106 se
+   migrará el write a Postgres también. */
+const AuditRepo = {
+  async serverRecent(limit) {
+    limit = limit || 20;
+    if (!Backend.isSupabase()) {
+      const log = Persist.get('audit_log', []) || [];
+      return { ok: true, items: log.slice(-limit).reverse() };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { data, error } = await client.from('audit_log')
+        .select('*').order('timestamp', { ascending: false }).limit(limit);
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, items: data || [] };
+    } catch (e) { return { ok: false, error: e.message }; }
+  },
+
+  async serverCount() {
+    if (!Backend.isSupabase()) {
+      return { ok: true, total: (Persist.get('audit_log', []) || []).length };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { count, error } = await client.from('audit_log')
+        .select('*', { count: 'exact', head: true });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, total: count || 0 };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+};
+
+/* === D-quint · UsersRepo (lectura users_profile · STEP-105) ===
+   Igual: lectura admin-only. La escritura se hace al hacer signUp
+   (trigger handle_new_user crea la fila automáticamente). */
+const UsersRepo = {
+  async serverCount() {
+    if (!Backend.isSupabase()) {
+      return { ok: true, total: (Persist.get('users', []) || []).length };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { count, error } = await client.from('users_profile')
+        .select('*', { count: 'exact', head: true });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, total: count || 0 };
+    } catch (e) { return { ok: false, error: e.message }; }
+  },
+
+  async serverList(limit) {
+    limit = limit || 50;
+    if (!Backend.isSupabase()) {
+      return { ok: true, items: Persist.get('users', []) || [] };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { data, error } = await client.from('users_profile')
+        .select('uid, email, name, role, created_at')
+        .order('created_at', { ascending: false }).limit(limit);
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, items: data || [] };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+};
+
   /* Mapeo report JS → fila Postgres. Las columnas en SQL están en
      snake_case; los campos JS están en camelCase / snake_case mixto
      (legacy de Fase 0). _toRow normaliza ambas direcciones. */
@@ -3665,7 +3850,8 @@ const Router = {
     { path: '/admin/usuarios',       view: 'view-admin',          requires: 'admin', adminSub: 'users'   },
     { path: '/admin/config',         view: 'view-admin',          requires: 'admin', adminSub: 'config'  },
     { path: '/admin/exportar',       view: 'view-admin',          requires: 'admin', adminSub: 'export'  },
-    { path: '/admin/outbox',         view: 'view-admin',          requires: 'admin', adminSub: 'outbox'  }
+    { path: '/admin/outbox',         view: 'view-admin',          requires: 'admin', adminSub: 'outbox'  },
+    { path: '/admin/diagnostico',    view: 'view-admin',          requires: 'admin', adminSub: 'diagnostico' }
   ],
   init() { window.addEventListener('hashchange', () => this.resolve()); this.resolve(); },
   navigate(path) { window.location.hash = '#' + path; },
@@ -7250,6 +7436,249 @@ const Admin = {
     }
   },
 
+  /* ------ DIAGNÓSTICO · STEP-105 ------
+     Smoke test page que consulta el server directamente (no el cache)
+     para verificar que la conexión Supabase, el schema y los datos
+     están sincronizados. Útil antes de demos y para debugging. */
+  diagnostico: {
+    render(root) {
+      const isSupa = Backend.isSupabase();
+      const wkStatus = Backend.status();
+      const wkMs = Backend.lastDuration();
+      const wkLabels = {
+        idle:'En reposo', connecting:'Conectando', waking:'Despertando',
+        ready:'Listo', error:'Error'
+      };
+      const session = Auth.current();
+      const rtState = ReportsRepo.realtimeStatus();
+
+      root.innerHTML = `
+        <div class="admin-content-head">
+          <div>
+            <h2>Diagnóstico del backend</h2>
+            <p>Estado de la conexión Supabase, schema y datos sincronizados. Útil antes de demos y para validar el flujo end-to-end de Fase 1.</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-soft btn-sm" id="diag-refresh-btn">⟳ Recargar</button>
+          </div>
+        </div>
+
+        <!-- Backend status -->
+        <div class="dash-card">
+          <h4>Backend activo</h4>
+          <div class="diag-grid">
+            <div class="diag-cell">
+              <div class="lbl">Modo</div>
+              <div class="val"><strong>${isSupa ? 'Supabase' : 'localStorage (Fase 0)'}</strong></div>
+            </div>
+            <div class="diag-cell">
+              <div class="lbl">Estado conexión</div>
+              <div class="val">${wkLabels[wkStatus] || wkStatus}</div>
+            </div>
+            <div class="diag-cell">
+              <div class="lbl">Último ping</div>
+              <div class="val mono">${wkMs ? wkMs + ' ms' : '—'}</div>
+            </div>
+            <div class="diag-cell">
+              <div class="lbl">Realtime</div>
+              <div class="val mono">${rtState}</div>
+            </div>
+            <div class="diag-cell" style="grid-column: 1 / -1">
+              <div class="lbl">Sesión actual</div>
+              <div class="val mono" style="font-size: 12px; word-break: break-all">
+                ${session ? session.email + ' · rol: ' + session.role + ' · uid: ' + session.uid : '<em>sin sesión</em>'}
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap">
+            <button class="btn btn-primary btn-sm" id="diag-wakeup-btn">⚡ Wakeup ahora</button>
+            <button class="btn btn-soft btn-sm" id="diag-hydrate-btn" ${isSupa ? '' : 'disabled title="Solo aplica en modo Supabase"'}>↓ Hidratar cache local</button>
+            <button class="btn btn-soft btn-sm" id="diag-resubscribe-btn" ${isSupa ? '' : 'disabled'}>↻ Re-suscribir Realtime</button>
+            <span id="diag-action-result" class="soft" style="font-size: 13px; align-self: center"></span>
+          </div>
+        </div>
+
+        <!-- Conteos de tablas -->
+        <div class="dash-card">
+          <h4>Conteos en el servidor</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 16px">Estos números vienen directamente de Postgres (count exact) ${isSupa ? '· lecturas en paralelo, ~1 round-trip' : '· localStorage, computado en cliente'}.</p>
+          <div class="diag-counts" id="diag-counts">
+            <div class="diag-count-card"><div class="num" id="dc-reports">…</div><div class="lbl">reports</div></div>
+            <div class="diag-count-card"><div class="num" id="dc-users">…</div><div class="lbl">users_profile</div></div>
+            <div class="diag-count-card"><div class="num" id="dc-audit">…</div><div class="lbl">audit_log</div></div>
+            <div class="diag-count-card diag-count-cache"><div class="num" id="dc-cache">…</div><div class="lbl">cache local</div></div>
+          </div>
+        </div>
+
+        <!-- Últimas denuncias del server -->
+        <div class="dash-card">
+          <h4>Últimas 5 denuncias (lectura directa del server)</h4>
+          <div id="diag-recent-reports"><p class="soft">Consultando…</p></div>
+        </div>
+
+        <!-- Últimos usuarios -->
+        <div class="dash-card">
+          <h4>Últimos 10 usuarios registrados</h4>
+          <div id="diag-recent-users"><p class="soft">Consultando…</p></div>
+        </div>
+
+        <!-- Últimas entradas de audit_log -->
+        <div class="dash-card">
+          <h4>Últimas 20 entradas del audit_log</h4>
+          <p class="soft" style="font-size: 12px; margin-bottom: 12px">
+            ${isSupa ? 'En Fase 1 las escrituras de audit_log siguen siendo locales (STEP-106 las migrará a Postgres). Esta lista muestra lo que ya hay en el server.' : 'En modo localStorage el audit_log vive en eco.audit_log (cap 1000 entradas).'}
+          </p>
+          <div id="diag-recent-audit"><p class="soft">Consultando…</p></div>
+        </div>
+      `;
+
+      /* Carga asíncrona de los conteos y listas */
+      Admin.diagnostico._loadCounts();
+      Admin.diagnostico._loadRecentReports();
+      Admin.diagnostico._loadRecentUsers();
+      Admin.diagnostico._loadRecentAudit();
+
+      /* Bind acciones */
+      const refreshBtn = document.getElementById('diag-refresh-btn');
+      if (refreshBtn) refreshBtn.onclick = () => Admin.diagnostico.render(root);
+
+      const wakeupBtn = document.getElementById('diag-wakeup-btn');
+      if (wakeupBtn) wakeupBtn.onclick = async () => {
+        wakeupBtn.disabled = true;
+        const r = await Backend.wakeup();
+        const result = document.getElementById('diag-action-result');
+        if (result) result.innerHTML = r.ok
+          ? `<span style="color: var(--brand-deep); font-weight: 600">✓ ${r.duration} ms</span>`
+          : `<span style="color: var(--alarm); font-weight: 600">✗ ${r.error || ('HTTP ' + r.status)}</span>`;
+        setTimeout(() => Admin.diagnostico.render(root), 1500);
+      };
+
+      const hydrateBtn = document.getElementById('diag-hydrate-btn');
+      if (hydrateBtn) hydrateBtn.onclick = async () => {
+        hydrateBtn.disabled = true;
+        const r = await ReportsRepo.refresh();
+        const result = document.getElementById('diag-action-result');
+        if (result) result.innerHTML = r.ok
+          ? `<span style="color: var(--brand-deep); font-weight: 600">✓ ${r.count} reports hidratados</span>`
+          : `<span style="color: var(--alarm); font-weight: 600">✗ ${r.reason}</span>`;
+        setTimeout(() => Admin.diagnostico.render(root), 1500);
+      };
+
+      const resubBtn = document.getElementById('diag-resubscribe-btn');
+      if (resubBtn) resubBtn.onclick = async () => {
+        resubBtn.disabled = true;
+        await ReportsRepo.unsubscribe();
+        const ch = await ReportsRepo.subscribe();
+        const result = document.getElementById('diag-action-result');
+        if (result) result.innerHTML = ch
+          ? `<span style="color: var(--brand-deep); font-weight: 600">✓ Canal reconectado</span>`
+          : `<span style="color: var(--alarm); font-weight: 600">✗ no se pudo suscribir</span>`;
+        setTimeout(() => Admin.diagnostico.render(root), 1500);
+      };
+    },
+
+    async _loadCounts() {
+      const [rep, usr, aud] = await Promise.all([
+        ReportsRepo.serverCount(),
+        UsersRepo.serverCount(),
+        AuditRepo.serverCount()
+      ]);
+      const setNum = (id, r) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = r.ok ? String(r.total) : '✗';
+        el.title = r.ok ? '' : (r.error || '');
+      };
+      setNum('dc-reports', rep);
+      setNum('dc-users',   usr);
+      setNum('dc-audit',   aud);
+      const cache = document.getElementById('dc-cache');
+      if (cache) cache.textContent = String((Persist.get('reports', []) || []).length);
+    },
+
+    async _loadRecentReports() {
+      const target = document.getElementById('diag-recent-reports');
+      if (!target) return;
+      const r = await ReportsRepo.serverRecent(5);
+      if (!r.ok) {
+        target.innerHTML = `<p class="soft" style="color: var(--alarm)">Error: ${r.error}</p>`;
+        return;
+      }
+      if (r.items.length === 0) {
+        target.innerHTML = `<p class="muted">Sin denuncias todavía. Crea una desde <a href="#/denunciar">/denunciar</a> y vuelve.</p>`;
+        return;
+      }
+      target.innerHTML = `<table class="admin-table">
+        <thead><tr><th>Radicado</th><th>Banda</th><th>Estado</th><th>Anónima</th><th>Creado</th></tr></thead>
+        <tbody>
+          ${r.items.map(it => `
+            <tr style="cursor: pointer" data-diag-radicado="${it.radicado}">
+              <td class="mono" style="font-size: 12px">${it.radicado}</td>
+              <td><span class="band-pill" data-band="${it.band}">${Risk.bandLabel(it.band)}</span></td>
+              <td><span class="status-pill" data-status="${it.status}">${Admin.statusLabel(it.status)}</span></td>
+              <td class="center">${it.is_anonymous ? '🔒' : '—'}</td>
+              <td style="font-size: 12px">${new Date(it.created_at).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+      target.querySelectorAll('[data-diag-radicado]').forEach(tr => {
+        tr.onclick = () => Admin.reports.openDetail(tr.dataset.diagRadicado);
+      });
+    },
+
+    async _loadRecentUsers() {
+      const target = document.getElementById('diag-recent-users');
+      if (!target) return;
+      const r = await UsersRepo.serverList(10);
+      if (!r.ok) {
+        target.innerHTML = `<p class="soft" style="color: var(--alarm)">Error: ${r.error}</p>`;
+        return;
+      }
+      if (r.items.length === 0) {
+        target.innerHTML = `<p class="muted">Sin usuarios.</p>`;
+        return;
+      }
+      target.innerHTML = `<table class="admin-table">
+        <thead><tr><th>Email</th><th>Nombre</th><th>Rol</th><th>Creado</th></tr></thead>
+        <tbody>
+          ${r.items.map(u => `
+            <tr>
+              <td class="mono" style="font-size: 12px">${u.email || '—'}</td>
+              <td>${u.name || '<span class="muted">—</span>'}</td>
+              <td><span class="status-pill" data-status="${u.role === 'admin' ? 'in_progress' : 'received'}">${u.role}</span></td>
+              <td style="font-size: 12px">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-CO') : '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    },
+
+    async _loadRecentAudit() {
+      const target = document.getElementById('diag-recent-audit');
+      if (!target) return;
+      const r = await AuditRepo.serverRecent(20);
+      if (!r.ok) {
+        target.innerHTML = `<p class="soft" style="color: var(--alarm)">Error: ${r.error}</p>`;
+        return;
+      }
+      if (r.items.length === 0) {
+        target.innerHTML = `<p class="muted">Sin entradas todavía.</p>`;
+        return;
+      }
+      target.innerHTML = `<table class="admin-table" style="font-size: 12px">
+        <thead><tr><th>Cuándo</th><th>Acción</th><th>Entidad</th><th>ID</th></tr></thead>
+        <tbody>
+          ${r.items.map(it => `
+            <tr>
+              <td class="mono">${new Date(it.timestamp).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' })}</td>
+              <td><code style="font-size: 11px">${it.action}</code></td>
+              <td>${it.entity}</td>
+              <td class="mono" style="font-size: 11px">${it.entity_id || '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+  },
+
   /* ------ Helpers compartidos ------ */
   statusLabel(s) {
     const map = { received: 'recibida', triaged: 'triada', in_progress: 'en progreso', resolved: 'resuelta' };
@@ -7772,8 +8201,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.12.0', step: 'STEP-104' });
-    console.log('%cEco-Complaint · v0.12.0 · STEP-102+103+104 · Auth dual + Schema SQL + ReportsRepo · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.13.0', step: 'STEP-105' });
+    console.log('%cEco-Complaint · v0.13.0 · STEP-105 · Diagnóstico + repos analíticos · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
@@ -7862,6 +8291,33 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.13.0 · STEP-105 · 2026-05-12 · Diagnóstico admin + repos analíticos
+   + Nueva sub-vista /admin/diagnostico con smoke test panel completo:
+     · Estado del backend (modo, conexión, último ping, Realtime channel)
+     · Sesión activa con uid + rol
+     · Conteos vivos de las 4 tablas (reports, users_profile, audit_log)
+       comparados con el cache local (visual cue dashed)
+     · Últimas 5 denuncias leídas DIRECTAMENTE del server (no del cache)
+     · Últimos 10 usuarios registrados
+     · Últimas 20 entradas del audit_log de Postgres
+   + Acciones one-click: Wakeup ahora, Hidratar cache local desde server,
+     Re-suscribir Realtime. Cada acción muestra resultado inline y
+     auto-recarga la vista tras 1.5s para refrescar todos los indicadores.
+   + ReportsRepo extendido con métodos analíticos: serverCount(),
+     serverRecent(limit), serverByBand() (con count exact en Postgres,
+     en paralelo por banda en modo Supabase; computado en cliente en
+     modo localStorage). realtimeStatus() expone el state del channel.
+   + Nuevo módulo AuditRepo: serverCount() + serverRecent(limit) leyendo
+     audit_log con la policy admin_read. Sigue escribiendo localmente
+     vía Audit.log() hasta STEP-106.
+   + Nuevo módulo UsersRepo: serverCount() + serverList(limit) leyendo
+     users_profile (uid, email, name, role, created_at).
+   + Sidebar admin: nueva sección "Backend · Fase 1" con link
+     "Diagnóstico". Ruta /admin/diagnostico registrada en Router.
+   + CSS: diag-grid + diag-counts (responsive) + tarjeta cache marcada
+     con borde dashed para diferenciarla visualmente de los counts
+     reales del server.
+
    v0.12.0 · STEP-102+103+104 · 2026-05-12 · Auth dual + Schema + Repo
    STEP-102 · Auth dual (Local/Supabase)
    + Renombrado el Auth monolítico de Fase 0 a LocalAuth (mantiene
