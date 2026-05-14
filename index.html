@@ -2843,30 +2843,73 @@ const Bus = {
   emit(event, payload) { (this.listeners[event] || []).forEach(fn => { try { fn(payload); } catch (e) { console.error('[Bus]', event, e); } }); }
 };
 
-/* === D · AUDITORÍA === */
+/* === D · AUDITORÍA (write-through async · STEP-106) ===
+   log() retorna SINCRÓNICAMENTE el entry (no rompe call-sites) y, si
+   el backend Supabase está activo, dispara INSERT fire-and-forget al
+   server. La policy audit_log_insert_any permite a anon + authenticated
+   escribir. Si el fetch al server falla, la entrada queda en el cache
+   local (eco.audit_log) y se loggea un warning — no se reintenta para
+   evitar bucles. El log local mantiene cap de 1000 entradas. */
 const Audit = {
-  log(action, entity = 'system', entity_id = null, details = {}) {
+  log(action, entity, entity_id, details) {
+    if (entity === undefined) entity = 'system';
+    if (entity_id === undefined) entity_id = null;
+    if (details === undefined) details = {};
     const session = Store.get().session;
     const isAnonymous = !session;
     const entry = {
       log_id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
       timestamp: new Date().toISOString(),
       user_id:   session ? session.uid : null,
-      action, entity, entity_id, details,
+      action: action, entity: entity, entity_id: entity_id, details: details,
       ip:         isAnonymous ? null : '127.0.0.1',
       user_agent: isAnonymous ? null : navigator.userAgent
     };
+    /* 1) cache local · siempre */
     const log = Persist.get('audit_log', []);
     log.push(entry);
     if (log.length > 1000) log.splice(0, log.length - 1000);
     Persist.set('audit_log', log);
     Bus.emit('audit:append', entry);
+    /* 2) server · fire-and-forget en supabase mode */
+    if (Backend.isSupabase()) {
+      this._sendToServer(entry).catch(function(e) {
+        console.warn('[Audit] no se envió al server:', e.message || e);
+      });
+    }
     return entry;
   },
-  list(filter = {}) {
+
+  /* INSERT al server. No bloquea log() porque se llama sin await.
+     Validate uid: si session.uid es un UUID válido lo enviamos; si es
+     un id local legacy (ej 'u_xxx'), lo dejamos null para que no
+     viole la FK contra auth.users. */
+  async _sendToServer(entry) {
+    const client = await Backend.client();
+    if (!client) return;
+    const looksLikeUuid = function(s) {
+      return typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+    };
+    const row = {
+      log_id:    entry.log_id,
+      timestamp: entry.timestamp,
+      user_id:   looksLikeUuid(entry.user_id) ? entry.user_id : null,
+      action:    entry.action,
+      entity:    entry.entity,
+      entity_id: entry.entity_id ? String(entry.entity_id) : null,
+      details:   entry.details || {},
+      ip:        entry.ip,
+      user_agent: entry.user_agent
+    };
+    const { error } = await client.from('audit_log').insert(row);
+    if (error) throw new Error(error.message);
+  },
+
+  list(filter) {
+    filter = filter || {};
     let log = Persist.get('audit_log', []);
-    if (filter.action)  log = log.filter(e => e.action === filter.action);
-    if (filter.user_id) log = log.filter(e => e.user_id === filter.user_id);
+    if (filter.action)  log = log.filter(function(e) { return e.action === filter.action; });
+    if (filter.user_id) log = log.filter(function(e) { return e.user_id === filter.user_id; });
     return log;
   }
 };
@@ -3397,6 +3440,106 @@ const UsersRepo = {
       if (error) return { ok: false, error: error.message };
       return { ok: true, items: data || [] };
     } catch (e) { return { ok: false, error: e.message }; }
+  }
+};
+
+/* === D-sext · ConfigRepo (singleton key-value · STEP-106) ===
+   Capa de configuración con caché triple: memoria (más rápido) →
+   localStorage (offline + cold-start) → Supabase (verdad última en
+   modo Supabase). En Fase 0/localStorage delega todo a Persist.
+
+   Keys usadas por la app:
+   - 'authorities'      → emails de autoridades por banda (admin-only RLS)
+   - 'authorities_meta' → labels y urgencia por banda (público)
+   - 'contact'          → datos públicos de la organización (público)
+*/
+const ConfigRepo = {
+  _cache: {},   /* memoria de la sesión actual */
+
+  async get(key) {
+    /* 1) memoria */
+    if (this._cache[key] !== undefined) return this._cache[key];
+    /* 2) localStorage (eco.config.<key>) */
+    const local = Persist.get('config.' + key);
+    if (local !== null && local !== undefined) {
+      this._cache[key] = local;
+      return local;
+    }
+    /* 3) Supabase si está activo */
+    if (Backend.isSupabase()) {
+      const client = await Backend.client();
+      if (client) {
+        try {
+          const { data, error } = await client.from('config')
+            .select('value').eq('key', key).maybeSingle();
+          if (!error && data) {
+            this._cache[key] = data.value;
+            Persist.set('config.' + key, data.value);
+            return data.value;
+          }
+        } catch (e) { console.warn('[ConfigRepo.get]', key, e); }
+      }
+    }
+    return null;
+  },
+
+  /* set escribe a los 3 niveles. En modo Supabase requiere admin (policy
+     config_admin_write). Lanza error si la escritura al server falla;
+     el cliente verá el toast. El cache local + memoria se actualizan
+     SIEMPRE para que el cambio sea inmediato en la UI. */
+  async set(key, value) {
+    this._cache[key] = value;
+    Persist.set('config.' + key, value);
+    if (Backend.isSupabase()) {
+      const client = await Backend.client();
+      if (!client) throw new Error('Backend Supabase no disponible');
+      const session = Auth.current();
+      const { error } = await client.from('config').upsert({
+        key, value, updated_by: session ? session.uid : null, updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+      if (error) throw new Error(this._friendlyError(error));
+    }
+    Audit.log('config_set', 'config', key, { backend: Backend.isSupabase() ? 'supabase' : 'local' });
+    Bus.emit('config:changed', { key, value });
+    return value;
+  },
+
+  /* Trae todas las keys públicas desde el server al cache local.
+     Se llama en init() después del wakeup para hidratar contact +
+     authorities_meta. Las keys admin-only (authorities con correos)
+     solo se devuelven si la sesión es admin (RLS filtra). */
+  async refresh() {
+    if (!Backend.isSupabase()) return { ok: true, skipped: true };
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { data, error } = await client.from('config').select('key, value');
+      if (error) return { ok: false, error: error.message };
+      (data || []).forEach(row => {
+        this._cache[row.key] = row.value;
+        Persist.set('config.' + row.key, row.value);
+      });
+      return { ok: true, count: (data || []).length };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  },
+
+  /* Helper sincrónico para call-sites legacy que esperan lectura
+     instantánea (vistas que se renderizan sin await). Lee de memoria
+     o localStorage; NO consulta el server. Si la app aún no hizo
+     refresh() y la key no está en cache, devuelve el fallback. */
+  getSync(key, fallback) {
+    if (this._cache[key] !== undefined) return this._cache[key];
+    const local = Persist.get('config.' + key);
+    return (local !== null && local !== undefined) ? local : (fallback === undefined ? null : fallback);
+  },
+
+  _friendlyError(err) {
+    const m = (err && err.message || '').toLowerCase();
+    if (m.includes('row-level security')) return 'No tienes permisos de admin para modificar la configuración';
+    if (m.includes('network')) return 'Error de red al guardar la configuración';
+    return err.message || 'Error al guardar configuración';
   }
 };
 
@@ -7253,39 +7396,60 @@ const Admin = {
         };
       }
 
-      document.getElementById('cfg-save-btn').onclick = () => {
-        const newCfg = { master_email: document.getElementById('cfg-master').value.trim() };
-        bands.forEach(b => {
-          const ta = document.querySelector(`[data-cfg-band="${b}"]`);
-          newCfg[b] = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
-        });
-        Persist.set('config.authorities', newCfg);
-        /* Guardar también datos de contacto */
-        const newContact = { ...contact };
-        document.querySelectorAll('[data-contact-key]').forEach(el => {
-          newContact[el.dataset.contactKey] = el.value.trim();
-        });
-        Persist.set('config.contact', newContact);
-        Audit.log('config_save', 'config', null, { authorities: newCfg, contact: newContact });
-        Toast.show('Configuración guardada');
+      /* Save handler · STEP-106 · usa ConfigRepo.set para escribir
+         simultáneamente a cache local + Postgres (en supabase mode).
+         Si la escritura al server falla por RLS o red, el error sube
+         al toast y el cache local NO se rollback — el admin reintenta. */
+      document.getElementById('cfg-save-btn').onclick = async () => {
+        const btn = document.getElementById('cfg-save-btn');
+        const origTxt = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Guardando…';
+        try {
+          /* Autoridades */
+          const newCfg = { master_email: document.getElementById('cfg-master').value.trim() };
+          bands.forEach(b => {
+            const ta = document.querySelector(`[data-cfg-band="${b}"]`);
+            newCfg[b] = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+          });
+          await ConfigRepo.set('authorities', newCfg);
+          /* Contacto */
+          const newContact = { ...contact };
+          document.querySelectorAll('[data-contact-key]').forEach(el => {
+            newContact[el.dataset.contactKey] = el.value.trim();
+          });
+          await ConfigRepo.set('contact', newContact);
+          Toast.show('Configuración guardada' + (Backend.isSupabase() ? ' en Supabase' : ' (localStorage)'));
+        } catch (err) {
+          Toast.show('No se pudo guardar: ' + (err.message || err), 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = origTxt;
+        }
       };
       document.getElementById('cfg-reset-btn').onclick = async () => {
         const ok = await Modal.confirm({
           title: 'Restaurar configuración demo',
-          body: 'Se sobrescribirá la configuración actual con los valores de demostración.',
+          body: 'Se sobrescribirá la configuración actual con los valores de demostración. ' +
+                (Backend.isSupabase() ? 'Esto afecta también al server.' : ''),
           confirmText: 'Sí, restaurar',
           danger: true
         });
         if (!ok) return;
-        Persist.set('config.authorities', {
+        const demoAuth = {
           bajo: ['umata@demo.co'], medio: ['car-regional@demo.co'],
           alto: ['anla@demo.co', 'car-regional@demo.co'],
           critico: ['fiscalia122@demo.co', 'anla@demo.co', 'car-regional@demo.co'],
           extremo: ['fiscalia122@demo.co', 'anla@demo.co', 'denuncias@minambiente.gov.co', 'policia-ambiental@demo.co', 'car-regional@demo.co'],
           master_email: 'radicacion@Eco-Complaint.demo.co'
-        });
-        Toast.show('Configuración demo restaurada');
-        Admin.config.render(root);
+        };
+        try {
+          await ConfigRepo.set('authorities', demoAuth);
+          Toast.show('Configuración demo restaurada');
+          Admin.config.render(root);
+        } catch (err) {
+          Toast.show('No se pudo restaurar: ' + (err.message || err), 'error');
+        }
       };
     }
   },
@@ -8200,8 +8364,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.13.0', step: 'STEP-105' });
-    console.log('%cEco-Complaint · v0.13.0 · STEP-105 · Diagnóstico + repos analíticos · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.14.0', step: 'STEP-106' });
+    console.log('%cEco-Complaint · v0.14.0 · STEP-106 · ConfigRepo + Audit write-through · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
@@ -8214,17 +8378,24 @@ function init() {
       UI.updateLandingCTA();
     });
 
-    /* Wakeup async no bloqueante + hidratación del cache de reports +
-       suscripción Realtime. Se encadena en una sola Promise para que
-       cada paso solo arranque si el anterior tuvo éxito. */
+    /* Pipeline backend Supabase · STEP-106:
+         wakeup → ConfigRepo.refresh → ReportsRepo.refresh → subscribe Realtime.
+       Cada paso solo arranca si el anterior tuvo éxito. ConfigRepo.refresh()
+       trae contact + authorities_meta del server (y authorities si el user
+       es admin tras Auth.restore). Si falla algún paso, los siguientes se
+       saltan pero el cache local mantiene la app funcional. */
     if (Backend.isSupabase()) {
       Backend.wakeup()
         .then(function(r) {
           diag('wakeup · ' + (r.ok ? '✓ ' + r.duration + 'ms' : '✗ ' + (r.error || r.status)));
-          if (r.ok) return ReportsRepo.refresh();
+          if (r.ok) return ConfigRepo.refresh();
         })
         .then(function(r) {
-          if (r && r.ok) diag('✓ ReportsRepo.refresh · ' + r.count + ' reports');
+          if (r && r.ok && !r.skipped) diag('✓ ConfigRepo.refresh · ' + r.count + ' keys');
+          if (r && r.ok) return ReportsRepo.refresh();
+        })
+        .then(function(r) {
+          if (r && r.ok && !r.skipped) diag('✓ ReportsRepo.refresh · ' + r.count + ' reports');
           if (r && r.ok) return ReportsRepo.subscribe();
         })
         .then(function(ch) {
@@ -8290,6 +8461,45 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.14.0 · STEP-106 · 2026-05-14 · ConfigRepo + Audit write-through
+   + Nuevo módulo ConfigRepo con caché triple (memoria → localStorage
+     → Supabase). API: get(key), set(key, value), refresh(), getSync().
+     · get(): consulta en orden los 3 niveles, populating cache upstream.
+     · set(): escribe a memoria + localStorage SIEMPRE; en supabase mode
+       hace upsert con updated_by = session.uid y updated_at = now().
+       Lanza error legible si la escritura al server falla por RLS
+       (admin only) o red. La UI lo muestra como toast y permite
+       reintento sin perder el cambio del cache local.
+     · refresh(): hidrata cache desde server al inicio (pipeline).
+       Trae contact + authorities_meta (públicos) y authorities (admin).
+     · getSync(): helper para call-sites legacy que esperan lectura
+       instantánea sin await.
+     · Audit.log('config_set', ...) y Bus.emit('config:changed', ...)
+       en cada set para trazabilidad y reactividad.
+   + Pipeline de init() extendido: wakeup → ConfigRepo.refresh →
+     ReportsRepo.refresh → ReportsRepo.subscribe. Cada paso solo
+     arranca si el anterior tuvo éxito. Diag logs por paso.
+   + Audit.log() migrado a write-through async no-bloqueante:
+     · Mantiene retorno SINCRÓNICO del entry (no rompe call-sites).
+     · Si Backend.isSupabase(), dispara INSERT fire-and-forget al
+       server con this._sendToServer(entry).catch(console.warn).
+     · _sendToServer valida user_id: solo lo envía si parece UUID
+       válido (regex), si no lo deja null para no violar la FK contra
+       auth.users (caso de sesiones legacy con uid 'u_xxx').
+     · entity_id se castea a String para tolerar números y radicados.
+     · Toda la auditoría (login, navigate, status_change, report_send,
+       config_set, etc.) ahora aparece en la tabla audit_log de Postgres
+       y es visible en /admin/diagnostico.
+   + Admin.config.render save handler migrado a ConfigRepo.set:
+     · Botón "Guardar configuración" ahora es async con estado de
+       loading ("⏳ Guardando…") y manejo de errores.
+     · Toast diferenciado: "guardada en Supabase" vs "(localStorage)".
+     · "Restaurar valores demo" también migrado a ConfigRepo.set y
+       muestra advertencia explícita si afecta al server.
+   + Conversion del módulo Audit a sintaxis ES5-safe: parámetros
+     default movidos a chequeos explícitos (`if (entity === undefined)`)
+     para mayor compatibilidad con Safari iOS antiguos.
+
    v0.13.0 · STEP-105 · 2026-05-12 · Diagnóstico admin + repos analíticos
    + Nueva sub-vista /admin/diagnostico con smoke test panel completo:
      · Estado del backend (modo, conexión, último ping, Realtime channel)
