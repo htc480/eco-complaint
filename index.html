@@ -3304,6 +3304,65 @@ const ReportsRepo = {
     } catch (e) { return { ok: false, error: e.message }; }
   },
 
+  /* Bulk import · STEP-107
+     Importa un array de reports al server en chunks (200 por insert
+     para evitar payloads >1MB). Devuelve resumen con conteos de
+     inserted, skipped (duplicados de radicado) y failed (con errores
+     individuales). NO toca el cache local: el caller decide si
+     refresh() después para verlos. Solo activo en modo Supabase. */
+  async bulkImport(reports, opts) {
+    opts = opts || {};
+    const onProgress = opts.onProgress || function(){};
+    const chunkSize = opts.chunkSize || 200;
+    if (!Backend.isSupabase()) {
+      return { ok: false, error: 'bulkImport solo disponible en modo Supabase' };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    const result = { ok: true, total: reports.length, inserted: 0, skipped: 0, failed: 0, errors: [] };
+    /* Primero: detectar duplicados via SELECT radicado IN (...) para no
+       romper la transacción del chunk si hay conflicto unique */
+    let existing = new Set();
+    try {
+      const radicados = reports.map(r => r.radicado);
+      /* Postgres limita la cláusula IN a ~32K elementos · partimos en 500s */
+      for (let i = 0; i < radicados.length; i += 500) {
+        const slice = radicados.slice(i, i + 500);
+        const { data, error } = await client.from('reports').select('radicado').in('radicado', slice);
+        if (!error && data) data.forEach(d => existing.add(d.radicado));
+      }
+    } catch (e) {
+      console.warn('[bulkImport] no se pudo prefiltrar duplicados:', e);
+    }
+    const toInsert = reports.filter(r => !existing.has(r.radicado));
+    result.skipped = reports.length - toInsert.length;
+    /* Inserts en chunks */
+    for (let i = 0; i < toInsert.length; i += chunkSize) {
+      const chunk = toInsert.slice(i, i + chunkSize);
+      const rows = chunk.map(r => this._toRow(r));
+      try {
+        const { error } = await client.from('reports').insert(rows);
+        if (error) {
+          result.failed += chunk.length;
+          result.errors.push({ chunkStart: i, error: error.message });
+          result.ok = false;
+        } else {
+          result.inserted += chunk.length;
+        }
+      } catch (e) {
+        result.failed += chunk.length;
+        result.errors.push({ chunkStart: i, error: e.message });
+        result.ok = false;
+      }
+      onProgress({ done: i + chunk.length, total: toInsert.length, inserted: result.inserted, failed: result.failed });
+    }
+    Audit.log('reports_bulk_import', 'system', null, {
+      total: result.total, inserted: result.inserted,
+      skipped: result.skipped, failed: result.failed
+    });
+    return result;
+  },
+
   /* Estado de la subscription Realtime (para mostrar en diagnóstico) */
   realtimeStatus() {
     if (!Backend.isSupabase()) return 'n/a (localStorage)';
@@ -7689,10 +7748,38 @@ const Admin = {
         <div class="dash-card">
           <h4>Últimas 20 entradas del audit_log</h4>
           <p class="soft" style="font-size: 12px; margin-bottom: 12px">
-            ${isSupa ? 'En Fase 1 las escrituras de audit_log siguen siendo locales (STEP-106 las migrará a Postgres). Esta lista muestra lo que ya hay en el server.' : 'En modo localStorage el audit_log vive en eco.audit_log (cap 1000 entradas).'}
+            ${isSupa ? 'Las escrituras llegan al server fire-and-forget (STEP-106). Esta lista refleja la verdad última de Postgres.' : 'En modo localStorage el audit_log vive en eco.audit_log (cap 1000 entradas).'}
           </p>
           <div id="diag-recent-audit"><p class="soft">Consultando…</p></div>
         </div>
+
+        <!-- Migración local → Supabase · STEP-107 -->
+        ${isSupa ? `
+        <div class="dash-card">
+          <h4>Importar denuncias del cache local al server</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 12px">
+            Si tienes denuncias en <code>eco.reports</code> (cache local) que NO existen en Postgres
+            — típico si las creaste antes de configurar Supabase o con datos demo de Fase 0 —
+            puedes subirlas en una sola operación. La importación es <strong>idempotente</strong>:
+            los radicados duplicados se omiten automáticamente.
+          </p>
+          <div id="diag-import-preview" class="soft" style="font-size: 13px; margin-bottom: 12px"></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <button class="btn btn-primary btn-sm" id="diag-import-btn">↑ Migrar al server</button>
+            <button class="btn btn-soft btn-sm" id="diag-import-preview-btn">👁 Previsualizar</button>
+            <span id="diag-import-progress" class="soft" style="font-size: 13px; align-self: center"></span>
+          </div>
+          <details style="margin-top: 12px">
+            <summary style="cursor: pointer; font-size: 13px; color: var(--text-soft)">⚠ Operación destructiva opcional</summary>
+            <div style="padding: 12px 0">
+              <p class="soft" style="font-size: 12px">
+                Si tras migrar prefieres limpiar el cache local para evitar confusión, usa este botón.
+                NO borra nada del server. Las denuncias seguirán viéndose porque se rehidratan al recargar.
+              </p>
+              <button class="btn btn-ghost btn-sm" id="diag-clear-local-btn" style="color: var(--alarm); border-color: var(--alarm-soft)">⚠ Limpiar cache local</button>
+            </div>
+          </details>
+        </div>` : ''}
       `;
 
       /* Carga asíncrona de los conteos y listas */
@@ -7737,6 +7824,95 @@ const Admin = {
           ? `<span style="color: var(--brand-deep); font-weight: 600">✓ Canal reconectado</span>`
           : `<span style="color: var(--alarm); font-weight: 600">✗ no se pudo suscribir</span>`;
         setTimeout(() => Admin.diagnostico.render(root), 1500);
+      };
+
+      /* ---- Migración local → Supabase · STEP-107 ---- */
+      const previewBtn = document.getElementById('diag-import-preview-btn');
+      const importBtn  = document.getElementById('diag-import-btn');
+      const clearBtn   = document.getElementById('diag-clear-local-btn');
+
+      const computePreview = async () => {
+        const local = Persist.get('reports', []) || [];
+        const target = document.getElementById('diag-import-preview');
+        if (!target) return null;
+        if (local.length === 0) {
+          target.innerHTML = '<span class="muted">No hay denuncias en el cache local.</span>';
+          if (importBtn) importBtn.disabled = true;
+          return { local: [], existing: new Set() };
+        }
+        target.innerHTML = `Cache local: <strong>${local.length}</strong> denuncia${local.length>1?'s':''}. Verificando duplicados…`;
+        const client = await Backend.client();
+        let existing = new Set();
+        if (client) {
+          const radicados = local.map(r => r.radicado);
+          for (let i = 0; i < radicados.length; i += 500) {
+            const slice = radicados.slice(i, i + 500);
+            try {
+              const { data } = await client.from('reports').select('radicado').in('radicado', slice);
+              (data || []).forEach(d => existing.add(d.radicado));
+            } catch (e) { /* ignore, prefiltro best-effort */ }
+          }
+        }
+        const newOnes = local.filter(r => !existing.has(r.radicado));
+        target.innerHTML = `Cache local: <strong>${local.length}</strong> · ya en server: <strong>${existing.size}</strong> · pendientes de migrar: <strong style="color: var(--brand-deep)">${newOnes.length}</strong>`;
+        if (importBtn) importBtn.disabled = newOnes.length === 0;
+        return { local: local, existing: existing, newOnes: newOnes };
+      };
+
+      /* Preview inicial al render (silencioso, sin progress) */
+      computePreview();
+
+      if (previewBtn) previewBtn.onclick = () => computePreview();
+
+      if (importBtn) importBtn.onclick = async () => {
+        const ok = await Modal.confirm({
+          title: 'Migrar denuncias al server',
+          body: 'Se insertarán en Postgres las denuncias del cache local que aún no existen en el server. La operación es idempotente: los radicados duplicados se omiten. ¿Continuar?',
+          confirmText: 'Sí, migrar ahora',
+          cancelText: 'Cancelar'
+        });
+        if (!ok) return;
+        importBtn.disabled = true;
+        const origTxt = importBtn.textContent;
+        importBtn.textContent = '⏳ Migrando…';
+        const progress = document.getElementById('diag-import-progress');
+        const local = Persist.get('reports', []) || [];
+        try {
+          const result = await ReportsRepo.bulkImport(local, {
+            onProgress: (p) => {
+              if (progress) progress.textContent = `${p.done} / ${p.total} (inserted ${p.inserted})`;
+            }
+          });
+          if (result.ok) {
+            Toast.show(`Migración completa · ${result.inserted} insertadas · ${result.skipped} ya existían`);
+          } else {
+            Toast.show(`Migración parcial · ${result.inserted} OK · ${result.failed} fallidas`, 'error', 5000);
+            console.warn('[bulkImport] errores:', result.errors);
+          }
+          /* Hidratar cache desde el server para reflejar realidad */
+          await ReportsRepo.refresh();
+        } catch (err) {
+          Toast.show('Error de migración: ' + (err.message || err), 'error');
+        } finally {
+          importBtn.disabled = false;
+          importBtn.textContent = origTxt;
+          if (progress) progress.textContent = '';
+          setTimeout(() => Admin.diagnostico.render(root), 1500);
+        }
+      };
+
+      if (clearBtn) clearBtn.onclick = async () => {
+        const ok = await Modal.confirm({
+          title: 'Limpiar cache local de denuncias',
+          body: 'Borra eco.reports del navegador. NO afecta al server. Al recargar la app se rehidrata automáticamente desde Postgres. ¿Continuar?',
+          confirmText: 'Sí, limpiar',
+          danger: true
+        });
+        if (!ok) return;
+        Persist.set('reports', []);
+        Audit.log('reports_cache_cleared', 'system', null, { backend: 'local' });
+        Toast.show('Cache local limpiado · recargando…');
+        setTimeout(() => location.reload(), 800);
       };
     },
 
@@ -8364,8 +8540,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.14.0', step: 'STEP-106' });
-    console.log('%cEco-Complaint · v0.14.0 · STEP-106 · ConfigRepo + Audit write-through · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.15.0', step: 'STEP-107+108+109' });
+    console.log('%cEco-Complaint · v0.15.0 · Fase 1 CERRADA (STEP-107 import + STEP-108 pruebas + STEP-109 memoria) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
@@ -8461,6 +8637,54 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.15.0 · STEP-107+108+109 · 2026-05-14 · Cierre formal de Fase 1
+   STEP-107 · Importación local → Supabase
+   + ReportsRepo.bulkImport(reports[], opts):
+     · Detección previa de duplicados (SELECT radicado IN ...) en
+       slices de 500 para evitar romper transacciones por unique.
+     · INSERT por chunks de 200 (configurable). Cada chunk independiente
+       — si uno falla por red o RLS, los demás continúan.
+     · Resumen: { ok, total, inserted, skipped, failed, errors[] }.
+     · Callback onProgress({ done, total, inserted, failed }) para UI.
+     · Audit.log('reports_bulk_import', ...) con conteos finales.
+   + /admin/diagnostico: nueva sección "Importar denuncias del cache
+     local al server" (solo visible en modo Supabase):
+     · Preview que muestra: total local, ya en server, pendientes
+       (computado al render + botón "👁 Previsualizar").
+     · Botón "↑ Migrar al server" deshabilitado si no hay pendientes;
+       muestra progress en vivo durante la operación.
+     · Después de migrar, hace ReportsRepo.refresh() para que el cache
+       refleje el estado real del server.
+     · Bloque <details> opcional: "⚠ Limpiar cache local" con confirm
+       modal · útil tras migrar para evitar confusión (NO toca server;
+       la app rehidrata al recargar).
+
+   STEP-108 · Protocolo de pruebas (docs/fase-1-pruebas.md)
+   + Documento de QA pre-defensa con 18 escenarios de prueba:
+     · Setup inicial (4 escenarios: clean install, schema aplicado,
+       credenciales OK, cold-start)
+     · Auth (5 escenarios: signup, login, email verification, logout,
+       password reset)
+     · Denuncia E2E (4 escenarios: árbol completo, anónima, autenticada,
+       offline)
+     · Admin (3 escenarios: lectura de panel, cambio de estado, RLS)
+     · Realtime + privacy (2 escenarios)
+   + Tabla resumen con resultado esperado, columna ✓/✗ para marcar.
+   + Sección "Pruebas pre-defensa de tesis" con checklist específico
+     para el día de la defensa.
+
+   STEP-109 · Memoria técnica de Fase 1 (docs/fase-1-memoria-tecnica.md)
+   + Documento anexo de tesis (~3.500 palabras) cubriendo:
+     · Hipótesis de Fase 1 y métrica de éxito
+     · Decisión de Supabase vs Firebase (justificación académica)
+     · Arquitectura: capa de abstracción Backend + repositorios
+     · Esquema relacional con RLS expresando ADR-06 a nivel SQL
+     · Modelo de auth dual (LocalAuth + SupabaseAuth) + retrocompat
+     · Patrón hybrid cache + Realtime
+     · Migración progresiva localStorage → Postgres
+     · Validación empírica (cold-start, RLS, Realtime)
+     · Trade-offs aceptados y entrada a Fase 2
+
    v0.14.0 · STEP-106 · 2026-05-14 · ConfigRepo + Audit write-through
    + Nuevo módulo ConfigRepo con caché triple (memoria → localStorage
      → Supabase). API: get(key), set(key, value), refresh(), getSync().
