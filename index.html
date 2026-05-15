@@ -3502,6 +3502,202 @@ const UsersRepo = {
   }
 };
 
+/* === D-quinque · EvidenceRepo (Supabase Storage · STEP-202/203 · Fase 2) ===
+   Capa de abstracción sobre el bucket privado "evidencias". En modo
+   Supabase: upload directo, signed URLs con expiración (7 días por
+   defecto), borrado admin-only. En modo localStorage: no-op (el
+   módulo Evidence sigue guardando dataUrl base64 inline en el draft).
+
+   Path scheme: {uid_o_anon}/{radicado_o_draft}/{nanoid}.{ext}
+   - uid: agrupa por owner (necesario para las policies RLS de Storage).
+   - radicado o draft: agrupa por denuncia (radicado si ya hay envío,
+     'draft' mientras no se ha enviado).
+   - nanoid: imprevisible, evita enumeración.
+
+   Cache local de signed URLs: vive en memoria de la sesión (window-scoped)
+   para no regenerar URLs si el usuario navega entre vistas del admin
+   en menos de 6 días. */
+
+const EvidenceRepo = {
+  _bucket: 'evidencias',
+  _signedCache: {},  /* path → { url, expiresAt } */
+
+  _defaults() {
+    const cfg = ConfigRepo.getSync('storage', {});
+    return {
+      bucket:                   cfg.bucket || this._bucket,
+      signed_url_expires_seconds: cfg.signed_url_expires_seconds || 604800,  /* 7 días */
+      max_file_mb:              cfg.max_file_mb || 10,
+      max_files_per_report:     cfg.max_files_per_report || 8
+    };
+  },
+
+  /* Sube un Blob al bucket. Retorna { ok, path, ... } o { ok: false, error }.
+     onProgress(loaded, total) opcional (no usado actualmente porque el
+     SDK no expone progress; reservado para futuro). */
+  async upload(blob, opts) {
+    opts = opts || {};
+    if (!Backend.isSupabase()) return { ok: false, error: 'storage_not_active' };
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    const defs = this._defaults();
+    if (blob.size > defs.max_file_mb * 1024 * 1024) {
+      return { ok: false, error: 'Archivo excede ' + defs.max_file_mb + ' MB' };
+    }
+    /* Path: prefijo de owner para que las policies RLS aprueben */
+    const session = Auth.current();
+    const ownerSeg = (session && session.uid) ? session.uid : 'anon';
+    const groupSeg = opts.group || 'draft';
+    const ext = (opts.ext || this._extFromMime(blob.type) || 'bin');
+    const nano = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    const path = ownerSeg + '/' + groupSeg + '/' + nano + '.' + ext;
+    try {
+      const { error } = await client.storage.from(defs.bucket).upload(path, blob, {
+        contentType: opts.mime || blob.type || 'application/octet-stream',
+        upsert: false
+      });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, path: path, bucket: defs.bucket };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  },
+
+  /* Genera signed URL para un path. Cachea en memoria para no regenerar
+     en cada render. expiresIn en segundos. */
+  async signUrl(path, expiresIn) {
+    if (!Backend.isSupabase()) return { ok: false, error: 'storage_not_active' };
+    const defs = this._defaults();
+    expiresIn = expiresIn || defs.signed_url_expires_seconds;
+    /* Cache hit con margen de 60s */
+    const cached = this._signedCache[path];
+    if (cached && cached.expiresAt > Date.now() + 60000) {
+      return { ok: true, url: cached.url, cached: true };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { data, error } = await client.storage.from(defs.bucket).createSignedUrl(path, expiresIn);
+      if (error || !data) return { ok: false, error: error ? error.message : 'no_url' };
+      this._signedCache[path] = { url: data.signedUrl, expiresAt: Date.now() + (expiresIn * 1000) };
+      return { ok: true, url: data.signedUrl, cached: false };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  },
+
+  /* Signed URLs en lote · más eficiente que llamar signUrl N veces */
+  async signUrls(paths, expiresIn) {
+    if (!Backend.isSupabase()) return { ok: false, error: 'storage_not_active' };
+    const defs = this._defaults();
+    expiresIn = expiresIn || defs.signed_url_expires_seconds;
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    try {
+      const { data, error } = await client.storage.from(defs.bucket)
+        .createSignedUrls(paths, expiresIn);
+      if (error) return { ok: false, error: error.message };
+      const out = {};
+      (data || []).forEach(d => {
+        if (d.signedUrl && d.path) {
+          out[d.path] = d.signedUrl;
+          this._signedCache[d.path] = { url: d.signedUrl, expiresAt: Date.now() + (expiresIn * 1000) };
+        }
+      });
+      return { ok: true, urls: out };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  },
+
+  /* Borra del bucket. Solo admin via RLS policy. */
+  async remove(path) {
+    if (!Backend.isSupabase()) return { ok: false, error: 'storage_not_active' };
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client' };
+    const defs = this._defaults();
+    try {
+      const { error } = await client.storage.from(defs.bucket).remove([path]);
+      if (error) return { ok: false, error: error.message };
+      delete this._signedCache[path];
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  },
+
+  /* Migración base64 → Storage · STEP-206
+     Recorre todos los reports en cache local, encuentra evidence con
+     dataUrl, sube cada archivo al bucket y reemplaza dataUrl por path
+     en el JSON del report (luego actualiza vía ReportsRepo.update).
+     Es idempotente: skip si ya tiene path. */
+  async bulkMigrateFromBase64(onProgress) {
+    onProgress = onProgress || function(){};
+    if (!Backend.isSupabase()) return { ok: false, error: 'storage_not_active' };
+    const reports = Persist.get('reports', []) || [];
+    const result = { ok: true, totalReports: reports.length, scanned: 0, uploaded: 0, skipped: 0, failed: 0, errors: [] };
+    for (let i = 0; i < reports.length; i++) {
+      const r = reports[i];
+      result.scanned++;
+      if (!r.evidence || r.evidence.length === 0) continue;
+      let changed = false;
+      for (let j = 0; j < r.evidence.length; j++) {
+        const ev = r.evidence[j];
+        if (ev.path) { result.skipped++; continue; }
+        if (!ev.dataUrl) { result.skipped++; continue; }
+        try {
+          const blob = await this._dataUrlToBlob(ev.dataUrl);
+          const up = await this.upload(blob, {
+            group: r.radicado || 'legacy',
+            mime: ev.mime || blob.type,
+            ext: this._extFromMime(ev.mime || blob.type)
+          });
+          if (!up.ok) {
+            result.failed++;
+            result.errors.push({ radicado: r.radicado, ev_id: ev.id, error: up.error });
+            continue;
+          }
+          r.evidence[j] = {
+            id: ev.id, type: ev.type, name: ev.name, mime: ev.mime, size: ev.size,
+            description: ev.description, timestamp: ev.timestamp,
+            path: up.path  /* dataUrl ELIMINADA */
+          };
+          result.uploaded++;
+          changed = true;
+        } catch (e) {
+          result.failed++;
+          result.errors.push({ radicado: r.radicado, ev_id: ev.id, error: e.message });
+        }
+      }
+      if (changed && r.radicado) {
+        try { await ReportsRepo.update(r.radicado, { evidence: r.evidence }); }
+        catch (e) { console.warn('[bulkMigrateFromBase64] update fail', r.radicado, e); }
+      }
+      onProgress({ done: i + 1, total: reports.length, uploaded: result.uploaded });
+    }
+    Persist.set('reports', reports);
+    Audit.log('evidence_bulk_migrate', 'system', null, {
+      uploaded: result.uploaded, skipped: result.skipped, failed: result.failed
+    });
+    return result;
+  },
+
+  _dataUrlToBlob(dataUrl) {
+    return fetch(dataUrl).then(r => r.blob());
+  },
+
+  _extFromMime(mime) {
+    if (!mime) return 'bin';
+    const map = {
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+      'image/heic': 'heic', 'image/heif': 'heif',
+      'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm',
+      'application/pdf': 'pdf'
+    };
+    return map[mime] || mime.split('/')[1] || 'bin';
+  }
+};
+
 /* === D-sext · ConfigRepo (singleton key-value · STEP-106) ===
    Capa de configuración con caché triple: memoria (más rápido) →
    localStorage (offline + cold-start) → Supabase (verdad última en
@@ -5066,6 +5262,11 @@ const Evidence = {
   MAX_SIZE_MB: 5,
   TARGET_WIDTH: 1200,
 
+  /* STEP-202 · addFile ahora detecta backend:
+     - Supabase activo: comprime, sube al bucket privado, almacena `path`
+       en el draft (sin dataUrl). El draft se mantiene chico para no
+       saturar localStorage durante el flujo de denuncia.
+     - localStorage: comportamiento legacy, dataUrl base64 inline. */
   async addFile(file) {
     const draft = Persist.get('draft');
     if (!draft) throw { msg: 'No hay borrador activo' };
@@ -5086,15 +5287,36 @@ const Evidence = {
     } else {
       throw { msg: I18n.t('ev.bad_type', { name: file.name }) };
     }
-    const evidence = {
-      id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-      type, name: file.name, mime: file.type, size: file.size,
-      dataUrl, description: '',
-      timestamp: new Date().toISOString()
+    const id = 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    let evidence = {
+      id: id, type: type, name: file.name, mime: file.type, size: file.size,
+      description: '', timestamp: new Date().toISOString()
     };
+    if (Backend.isSupabase()) {
+      /* Sube al bucket. El blob se reconstruye desde el dataUrl
+         comprimido para que las imágenes mantengan el tamaño reducido
+         tras la compresión cliente; videos van tal cual. */
+      const blob = await EvidenceRepo._dataUrlToBlob(dataUrl);
+      const up = await EvidenceRepo.upload(blob, {
+        group: 'draft',
+        mime: file.type,
+        ext: EvidenceRepo._extFromMime(file.type)
+      });
+      if (!up.ok) throw { msg: 'No se pudo subir: ' + up.error };
+      evidence.path = up.path;
+      /* Cachea localmente el dataUrl SOLO para preview durante el flujo;
+         no se persiste cuando enviemos a Supabase porque Report.send
+         sustituye el evidence al insertar. */
+      evidence._previewDataUrl = dataUrl;
+    } else {
+      evidence.dataUrl = dataUrl;
+    }
     draft.evidence.push(evidence);
     Persist.set('draft', draft);
-    Audit.log('evidence_add', 'report', evidence.id, { name: file.name, type, size: file.size });
+    Audit.log('evidence_add', 'report', evidence.id, {
+      name: file.name, type: type, size: file.size,
+      backend: Backend.isSupabase() ? 'supabase' : 'local'
+    });
     return evidence;
   },
 
@@ -5164,6 +5386,29 @@ const EvidenceView = {
     this.bindHandlers();
   },
 
+  /* Helper · STEP-203
+     Decide la src de un thumb según los campos presentes en el evidence:
+     - _previewDataUrl: cache en memoria durante el flujo de denuncia
+       (modo Supabase, evidence ya subida pero recién agregada)
+     - dataUrl: legacy (modo localStorage o reports antiguos)
+     - path:  hay que generar signed URL async (modo Supabase persistido)
+
+     Si requiere signed URL, devuelve null y el caller dispara una
+     carga lazy via loadSignedThumb(). */
+  thumbSrcSync(ev) {
+    if (ev._previewDataUrl) return ev._previewDataUrl;
+    if (ev.dataUrl) return ev.dataUrl;
+    return null;
+  },
+
+  /* Sustituye una src placeholder por la signed URL real. Encuentra
+     <img|video data-ev-path="..."> y los actualiza tras resolver. */
+  async loadSignedThumb(path, el) {
+    if (!path || !el) return;
+    const r = await EvidenceRepo.signUrl(path);
+    if (r.ok) el.src = r.url;
+  },
+
   renderGrid() {
     const draft = Persist.get('draft');
     if (!draft) return;
@@ -5175,9 +5420,12 @@ const EvidenceView = {
     grid.innerHTML = evidenceList.map(ev => {
       const sizeKb = Math.round(ev.size / 1024);
       const sizeStr = sizeKb > 1024 ? (sizeKb / 1024).toFixed(1) + ' MB' : sizeKb + ' KB';
+      const src = this.thumbSrcSync(ev);
+      const pathAttr = ev.path ? ` data-ev-path="${ev.path}"` : '';
+      const srcAttr = src ? ` src="${src}"` : '';
       const thumb = ev.type === 'image'
-        ? `<img src="${ev.dataUrl}" alt="${ev.name}">`
-        : `<video src="${ev.dataUrl}" muted></video>`;
+        ? `<img${srcAttr}${pathAttr} alt="${ev.name}">`
+        : `<video${srcAttr}${pathAttr} muted></video>`;
       return `
         <div class="ev-card" data-ev-id="${ev.id}">
           <div class="ev-thumb">${thumb}<span class="ev-thumb-badge">${ev.type}</span></div>
@@ -5195,6 +5443,10 @@ const EvidenceView = {
     });
     grid.querySelectorAll('[data-ev-desc]').forEach(ta => {
       ta.oninput = () => Evidence.updateDescription(ta.dataset.evDesc, ta.value);
+    });
+    /* Lazy load de signed URLs para thumbs sin src directo (solo path) */
+    grid.querySelectorAll('[data-ev-path]').forEach(el => {
+      if (!el.getAttribute('src')) this.loadSignedThumb(el.dataset.evPath, el);
     });
   },
 
@@ -5337,13 +5589,22 @@ const Report = {
     if (masterEmail) allEmails.add(masterEmail);
     const emailsArray = Array.from(allEmails);
 
-    /* Email body */
+    /* Email body · STEP-204 ahora async porque incluye signed URLs */
     const subject = `[${radicado}] Denuncia ambiental · ${Risk.bandLabel(draft.band)}`;
-    const body = this.buildEmailBody(draft, radicado);
+    const body = await this.buildEmailBody(draft, radicado);
     emailsArray.forEach(email => Outbox.enqueue(email, subject, body, radicado));
 
-    /* Crear report */
+    /* Crear report · STEP-203: limpiar _previewDataUrl (cache local
+       de preview durante el flujo) antes de persistir, para no
+       saturar la fila de Postgres con base64 que ya está en Storage. */
     const session = Auth.current();
+    const cleanEvidence = (draft.evidence || []).map(function(ev) {
+      const out = {};
+      Object.keys(ev).forEach(function(k) {
+        if (k !== '_previewDataUrl') out[k] = ev[k];
+      });
+      return out;
+    });
     const report = {
       radicado,
       delitos: draft.delitos,
@@ -5353,7 +5614,7 @@ const Report = {
       score: draft.score,
       band: draft.band,
       location: draft.location,
-      evidence: draft.evidence || [],
+      evidence: cleanEvidence,
       reporter_description: draft.reporter_description || '',
       tree_path: draft.history,
       user_id: draft.isAnonymous ? null : (session ? session.uid : null),
@@ -5380,7 +5641,10 @@ const Report = {
     return report;
   },
 
-  buildEmailBody(draft, radicado) {
+  /* STEP-204 · ahora async: genera signed URLs si las evidencias
+     viven en Storage. En modo localStorage retorna como antes
+     (sin links porque las evidencias están inline en cliente). */
+  async buildEmailBody(draft, radicado) {
     const delitos = Persist.get('delitos');
     const lines = [];
     lines.push(`RADICADO: ${radicado}`);
@@ -5409,24 +5673,40 @@ const Report = {
     lines.push('═══ EVIDENCIAS ═══');
     if (draft.evidence && draft.evidence.length > 0) {
       lines.push(`Cantidad: ${draft.evidence.length} archivo(s) registrado(s) en el sistema`);
+      /* Generar signed URLs en lote para las que tienen path (Storage).
+         Las legacy con dataUrl no aplican (siguen embebidas en cliente). */
+      const pathsForUrls = draft.evidence.filter(function(e) { return e.path; }).map(function(e) { return e.path; });
+      let signedMap = {};
+      let expiresDays = 7;
+      if (pathsForUrls.length > 0 && Backend.isSupabase()) {
+        const storageCfg = ConfigRepo.getSync('storage', {}) || {};
+        const expiresSec = storageCfg.signed_url_expires_seconds || 604800;
+        expiresDays = Math.round(expiresSec / 86400);
+        try {
+          const r = await EvidenceRepo.signUrls(pathsForUrls, expiresSec);
+          if (r.ok) signedMap = r.urls;
+        } catch (e) { console.warn('[buildEmailBody] signUrls fail', e); }
+      }
       draft.evidence.forEach((ev, i) => {
         lines.push(`  ${i + 1}. ${ev.name} (${ev.type}, ${Math.round(ev.size / 1024)} KB)`);
         if (ev.description) lines.push(`     "${ev.description}"`);
+        if (ev.path && signedMap[ev.path]) {
+          lines.push(`     → ${signedMap[ev.path]}`);
+        }
       });
       lines.push('');
-      lines.push('⚠ ENTREGA DE ARCHIVOS DE EVIDENCIA:');
-      lines.push('   Los archivos NO van adjuntos a este correo por limitaciones de tamaño.');
-      lines.push(`   Para acceder a las evidencias del radicado ${radicado}, opciones disponibles:`);
-      lines.push('');
-      lines.push('   (a) Solicitar copia al correo maestro de radicación:');
-      lines.push('       → radicacion@Eco-Complaint.demo.co');
-      lines.push('');
-      lines.push('   (b) Consultar el PDF del radicado, que contiene la galería visual');
-      lines.push('       embebida de todas las imágenes adjuntas.');
-      lines.push('');
-      lines.push('   (c) [Fase 2 · planeada] Consulta directa via link seguro:');
-      lines.push(`       https://Eco-Complaint.app/denuncias/${radicado}`);
-      lines.push('       (funcionalidad disponible al migrar a Firebase Storage)');
+      if (pathsForUrls.length > 0 && Object.keys(signedMap).length > 0) {
+        lines.push('🔗 ACCESO DIRECTO A LAS EVIDENCIAS:');
+        lines.push(`   Los enlaces arriba dan acceso a cada archivo durante ${expiresDays} día(s).`);
+        lines.push('   Pasada esa fecha, las URLs caducan; solicita renovación al correo maestro.');
+        lines.push('   Los archivos viven en almacenamiento seguro (no van adjuntos a este correo).');
+      } else {
+        lines.push('⚠ ENTREGA DE ARCHIVOS DE EVIDENCIA:');
+        lines.push('   Los archivos NO van adjuntos a este correo por limitaciones de tamaño.');
+        lines.push(`   Para acceder a las evidencias del radicado ${radicado}:`);
+        lines.push('   (a) Consulta el PDF del radicado, que contiene la galería visual.');
+        lines.push('   (b) Solicita copia al correo maestro de radicación.');
+      }
     } else lines.push('Sin evidencias adjuntas');
     if (draft.reporter_description) {
       lines.push('');
@@ -5465,10 +5745,19 @@ const Review = {
           : `Coordenadas: ${draft.location.lat.toFixed(5)}, ${draft.location.lng.toFixed(5)} (${draft.location.source})`)
       : '<span class="muted">Sin ubicación</span>';
 
+    /* STEP-203 · thumbs con src directa si hay dataUrl/preview, o
+       atributo data-ev-path para lazy load de signed URL después. */
     const evidenceHtml = (draft.evidence && draft.evidence.length > 0)
-      ? `<div class="review-evidence-grid">${draft.evidence.map(ev =>
-          `<div class="review-evidence-thumb">${ev.type === 'image' ? `<img src="${ev.dataUrl}" alt="${ev.name}">` : `<video src="${ev.dataUrl}" muted></video>`}</div>`
-        ).join('')}</div><div class="muted" style="margin-top:8px;font-size:13px">${draft.evidence.length} archivo(s) adjunto(s)</div>`
+      ? `<div class="review-evidence-grid">${draft.evidence.map(function(ev) {
+          const src = EvidenceView.thumbSrcSync(ev);
+          const pathAttr = ev.path ? ' data-ev-path="' + ev.path + '"' : '';
+          const srcAttr = src ? ' src="' + src + '"' : '';
+          return '<div class="review-evidence-thumb">' +
+            (ev.type === 'image'
+              ? '<img' + srcAttr + pathAttr + ' alt="' + (ev.name || '') + '">'
+              : '<video' + srcAttr + pathAttr + ' muted></video>') +
+            '</div>';
+        }).join('')}</div><div class="muted" style="margin-top:8px;font-size:13px">${draft.evidence.length} archivo(s) adjunto(s)</div>`
       : `<div class="muted">${I18n.t('rev.evidence.none')}</div>`;
 
     root.innerHTML = `
@@ -5531,6 +5820,10 @@ const Review = {
     if (draft.location && draft.location.lat) {
       MapWidget.initStatic('review-mini-map', draft.location.lat, draft.location.lng);
     }
+    /* STEP-203 · lazy load de signed URLs en thumbs sin src */
+    root.querySelectorAll('[data-ev-path]').forEach(function(el) {
+      if (!el.getAttribute('src')) EvidenceView.loadSignedThumb(el.dataset.evPath, el);
+    });
 
     /* Bind */
     document.getElementById('review-send-btn').onclick = async () => {
@@ -5752,14 +6045,37 @@ const PdfGen = {
     return { w: natW * ratio, h: natH * ratio };
   },
 
-  /* Pre-carga dimensiones naturales de cada imagen (async porque Image.onload lo es) */
+  /* Pre-carga dimensiones naturales + dataUrl resuelto de cada imagen.
+     STEP-205: si la evidencia vive en Storage (ev.path), genera signed
+     URL y descarga el binario, luego lo convierte a dataUrl porque
+     jsPDF.addImage es más confiable con dataUrls que con URLs https
+     (CORS, async loading). El dataUrl resuelto se almacena en el
+     resultado para que addImage no necesite otra carga. */
   loadImageDims(evList) {
-    return Promise.all(evList.map(ev => new Promise(resolve => {
-      const img = new Image();
-      img.onload  = () => resolve({ id: ev.id, w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
-      img.onerror = () => resolve({ id: ev.id, w: 4, h: 3 });   /* fallback 4:3 */
-      img.src = ev.dataUrl;
-    })));
+    return Promise.all(evList.map(async function(ev) {
+      let dataUrl = ev.dataUrl;
+      if (!dataUrl && ev.path && Backend.isSupabase()) {
+        try {
+          const r = await EvidenceRepo.signUrl(ev.path);
+          if (r.ok) {
+            const blob = await (await fetch(r.url)).blob();
+            dataUrl = await new Promise(function(res, rej) {
+              const fr = new FileReader();
+              fr.onload = function() { res(fr.result); };
+              fr.onerror = rej;
+              fr.readAsDataURL(blob);
+            });
+          }
+        } catch (e) { console.warn('[loadImageDims] fetch fail', ev.path, e); }
+      }
+      return await new Promise(function(resolve) {
+        if (!dataUrl) { resolve({ id: ev.id, w: 4, h: 3, dataUrl: null }); return; }
+        const img = new Image();
+        img.onload  = function() { resolve({ id: ev.id, w: img.naturalWidth || 4, h: img.naturalHeight || 3, dataUrl: dataUrl }); };
+        img.onerror = function() { resolve({ id: ev.id, w: 4, h: 3, dataUrl: dataUrl }); };
+        img.src = dataUrl;
+      });
+    }));
   },
 
   /* Genera y descarga un PDF formal del radicado con galería de evidencias embebidas */
@@ -6061,9 +6377,11 @@ const PdfGen = {
         doc.setLineWidth(0.2);
         doc.roundedRect(x, y, cellW, cellH, 1, 1, 'S');
 
-        /* Imagen */
+        /* Imagen · usa dataUrl resuelto (legacy inline o fetched de Storage) */
+        const resolvedDataUrl = (imageDims[ev.id] && imageDims[ev.id].dataUrl) || ev.dataUrl;
         try {
-          doc.addImage(ev.dataUrl, 'JPEG', imgX, y, fit.w, fit.h);
+          if (!resolvedDataUrl) throw new Error('no dataUrl');
+          doc.addImage(resolvedDataUrl, 'JPEG', imgX, y, fit.w, fit.h);
         } catch (err) {
           /* Fallback si la imagen falla */
           setFillColor(COLOR_LINE);
@@ -7154,9 +7472,18 @@ const Admin = {
           <div class="drawer-section">
             <h5>Evidencias (${(r.evidence || []).length})</h5>
             ${(r.evidence && r.evidence.length > 0)
-              ? `<div class="review-evidence-grid">${r.evidence.map(ev =>
-                  `<div class="review-evidence-thumb" title="${ev.name} · ${ev.description || ''}">${ev.type === 'image' ? `<img src="${ev.dataUrl}" alt="${ev.name}">` : `<video src="${ev.dataUrl}" muted controls></video>`}</div>`
-                ).join('')}</div>`
+              ? `<div class="review-evidence-grid">${r.evidence.map(function(ev) {
+                  const src = EvidenceView.thumbSrcSync(ev);
+                  const pathAttr = ev.path ? ' data-ev-path="' + ev.path + '"' : '';
+                  const srcAttr  = src ? ' src="' + src + '"' : '';
+                  const title = (ev.name || '') + (ev.description ? ' · ' + ev.description : '');
+                  return '<div class="review-evidence-thumb" title="' + title + '">' +
+                    (ev.type === 'image'
+                      ? '<img' + srcAttr + pathAttr + ' alt="' + (ev.name || '') + '">'
+                      : '<video' + srcAttr + pathAttr + ' muted controls></video>') +
+                    '</div>';
+                }).join('')}</div>
+                ${r.evidence.some(function(e){return e.path}) ? '<p class="soft" style="font-size:11px;margin-top:6px">Las URLs firmadas expiran cada ' + Math.round((ConfigRepo.getSync('storage',{}).signed_url_expires_seconds||604800)/86400) + ' días. Vuelve a abrir el detalle si caduca.</p>' : ''}`
               : '<p class="muted">Sin evidencias</p>'}
           </div>
 
@@ -7779,6 +8106,28 @@ const Admin = {
               <button class="btn btn-ghost btn-sm" id="diag-clear-local-btn" style="color: var(--alarm); border-color: var(--alarm-soft)">⚠ Limpiar cache local</button>
             </div>
           </details>
+        </div>
+
+        <!-- Migración evidencias base64 → Storage · STEP-206 -->
+        <div class="dash-card">
+          <h4>Migrar evidencias base64 al bucket Storage</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 12px">
+            Recorre todos los reports del cache local y, para cada evidencia con
+            <code>dataUrl</code> base64 inline (legacy Fase 0 o reportes creados
+            antes de configurar Storage), la sube al bucket privado <code>evidencias</code>
+            y reemplaza el campo por <code>path</code>. Es <strong>idempotente</strong>:
+            las evidencias que ya tienen <code>path</code> se omiten.
+          </p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <button class="btn btn-primary btn-sm" id="diag-evmigrate-btn">📁 Migrar evidencias al bucket</button>
+            <span id="diag-evmigrate-progress" class="soft" style="font-size: 13px; align-self: center"></span>
+          </div>
+          <p class="soft" style="font-size: 11px; margin-top: 8px">
+            Cuidado: las evidencias base64 ya viajaron al server cuando se insertó
+            el report (dataUrl forma parte del JSON). Esta migración no las elimina
+            del server automáticamente; el espacio se libera con un UPDATE explícito
+            que reemplaza el evidence array — eso ya lo hace este tool.
+          </p>
         </div>` : ''}
       `;
 
@@ -7913,6 +8262,41 @@ const Admin = {
         Audit.log('reports_cache_cleared', 'system', null, { backend: 'local' });
         Toast.show('Cache local limpiado · recargando…');
         setTimeout(() => location.reload(), 800);
+      };
+
+      /* STEP-206 · Migración evidencias base64 → Storage */
+      const evMigrateBtn = document.getElementById('diag-evmigrate-btn');
+      if (evMigrateBtn) evMigrateBtn.onclick = async () => {
+        const ok = await Modal.confirm({
+          title: 'Migrar evidencias al bucket',
+          body: 'Recorre todos los reports locales y sube las evidencias con dataUrl al bucket privado. Reemplaza dataUrl por path. Es idempotente y puede tomar varios segundos por archivo (subida + UPDATE). ¿Continuar?',
+          confirmText: 'Sí, migrar',
+          cancelText: 'Cancelar'
+        });
+        if (!ok) return;
+        evMigrateBtn.disabled = true;
+        const origTxt = evMigrateBtn.textContent;
+        evMigrateBtn.textContent = '⏳ Migrando…';
+        const progress = document.getElementById('diag-evmigrate-progress');
+        try {
+          const r = await EvidenceRepo.bulkMigrateFromBase64(function(p) {
+            if (progress) progress.textContent = `Report ${p.done} / ${p.total} · ${p.uploaded} archivos subidos`;
+          });
+          if (r.ok) {
+            Toast.show(`✓ ${r.uploaded} archivos subidos · ${r.skipped} omitidos · ${r.failed} fallidos`);
+          } else {
+            Toast.show(`Migración parcial · ${r.uploaded} OK · ${r.failed} fallidos`, 'error', 5000);
+            console.warn('[bulkMigrateFromBase64] errores:', r.errors);
+          }
+          await ReportsRepo.refresh();
+        } catch (err) {
+          Toast.show('Error: ' + (err.message || err), 'error');
+        } finally {
+          evMigrateBtn.disabled = false;
+          evMigrateBtn.textContent = origTxt;
+          if (progress) progress.textContent = '';
+          setTimeout(() => Admin.diagnostico.render(root), 1500);
+        }
       };
     },
 
@@ -8091,6 +8475,24 @@ const Admin = {
     });
     if (report.location && report.location.lat) {
       MapWidget.initStatic('drawer-mini-map', report.location.lat, report.location.lng);
+    }
+    /* STEP-203 · Lazy load de signed URLs en thumbs del drawer · evidencias
+       que solo tienen path (no dataUrl legacy). Se resuelve en lote para
+       hacer 1 request en vez de N. */
+    const drawer = document.getElementById('admin-drawer');
+    if (drawer) {
+      const lazyEls = Array.from(drawer.querySelectorAll('[data-ev-path]'))
+        .filter(function(el) { return !el.getAttribute('src'); });
+      if (lazyEls.length > 0) {
+        const paths = lazyEls.map(function(el) { return el.dataset.evPath; });
+        EvidenceRepo.signUrls(paths).then(function(r) {
+          if (!r.ok) return;
+          lazyEls.forEach(function(el) {
+            const u = r.urls[el.dataset.evPath];
+            if (u) el.src = u;
+          });
+        });
+      }
     }
   },
 
@@ -8540,8 +8942,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.15.0', step: 'STEP-107+108+109' });
-    console.log('%cEco-Complaint · v0.15.0 · Fase 1 CERRADA (STEP-107 import + STEP-108 pruebas + STEP-109 memoria) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.16.0', step: 'STEP-201..208' });
+    console.log('%cEco-Complaint · v0.16.0 · Fase 2 (Storage + signed URLs) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
@@ -8637,6 +9039,69 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.16.0 · STEP-201..208 · 2026-05-14 · Fase 2 · Storage de evidencias
+   STEP-201 · Setup SQL del bucket (docs/fase-2-storage-setup.sql)
+   + Bucket privado 'evidencias' con file_size_limit 10 MB y allowed_mime_types
+     (image/jpeg|png|webp|heic|heif, video/mp4|quicktime|webm, application/pdf).
+   + 4 policies RLS sobre storage.objects:
+     · evidencias_anon_insert (path 'anon/...')
+     · evidencias_auth_insert (path '{uid}/...' o 'anon/...')
+     · evidencias_owner_select (owner del path o admin)
+     · evidencias_admin_delete
+   + Seed config.storage con defaults: signed_url_expires_seconds=604800
+     (7 días), retention_days=365, max_file_mb=10, max_files_per_report=8.
+
+   STEP-202+203 · EvidenceRepo + refactor del módulo Evidence
+   + Nuevo EvidenceRepo (Backend abstraction sobre Supabase Storage):
+     · upload(blob, opts): path scheme {uid|anon}/{group}/{nanoid}.{ext};
+       validación de tamaño contra config; retorna { ok, path, bucket }
+     · signUrl(path, expiresIn): cache en memoria con margen de 60s
+     · signUrls(paths[], expiresIn): batch via createSignedUrls
+     · remove(path): admin-only via RLS
+     · bulkMigrateFromBase64(onProgress): migración Fase 0 → Fase 2
+   + Evidence.addFile refactored: detecta backend.
+     · localStorage: sigue guardando dataUrl base64 inline (legacy)
+     · Supabase: comprime, sube al bucket, guarda path. Mantiene
+       _previewDataUrl en memoria para el preview durante el flujo;
+       Report.send lo limpia antes de persistir.
+   + EvidenceView.thumbSrcSync(ev): decide src del thumb según campos
+     disponibles. Helper loadSignedThumb(path, el) actualiza un <img>
+     o <video> con la signed URL resuelta async.
+   + Renderizado lazy con signed URLs:
+     · EvidenceView.renderGrid (flujo denuncia)
+     · Review.render (preview antes de enviar)
+     · Admin drawer (detalle de un report) · usa signUrls batch para
+       una sola request HTTP en lugar de N
+
+   STEP-204 · buildEmailBody con signed URLs
+   + Report.buildEmailBody ahora es async.
+   + Cuando hay evidencias con path, genera signed URLs en lote y las
+     incluye al lado del nombre de cada archivo. Mensaje informativo
+     sobre la caducidad (X días) calculada desde config.storage.
+   + Backward-compat: si todas las evidencias son legacy dataUrl,
+     mantiene el mensaje original sobre solicitar al maestro o PDF.
+
+   STEP-205 · PdfGen con evidence.path
+   + PdfGen.loadImageDims ahora resuelve dataUrl si la evidencia es
+     path: signUrl → fetch blob → FileReader → dataUrl. El dataUrl
+     resuelto se incluye en el resultado y addImage lo usa.
+   + Fallback elegante: si signUrl/fetch falla, la celda muestra
+     "[imagen no disponible]" sin romper el PDF.
+
+   STEP-206 · Tool de migración base64 → Storage
+   + Nuevo botón "📁 Migrar evidencias al bucket" en /admin/diagnostico
+     (solo modo Supabase, junto al migrador de reports de STEP-107).
+   + Progress en vivo: "Report N/M · X archivos subidos".
+   + EvidenceRepo.bulkMigrateFromBase64 recorre eco.reports, sube cada
+     evidencia con dataUrl al bucket, reemplaza el campo por path,
+     hace UPDATE del report vía ReportsRepo.update para liberar el
+     espacio en Postgres.
+
+   STEP-208 · Memoria técnica de Fase 2 (docs/fase-2-memoria-tecnica.md)
+   + Documento anexo de tesis con decisiones de Storage privado,
+     path scheme + RLS por path, signed URLs con caducidad de 7 días,
+     migración progresiva base64 → bucket.
+
    v0.15.0 · STEP-107+108+109 · 2026-05-14 · Cierre formal de Fase 1
    STEP-107 · Importación local → Supabase
    + ReportsRepo.bulkImport(reports[], opts):
