@@ -37,15 +37,27 @@ create policy "config_public_read"
   using (key in ('contact', 'authorities_meta', 'authorities', 'emailjs', 'storage'));
 
 
--- 2 · Seed inicial de la key emailjs (vacío · el admin lo completa desde la UI)
+-- 2 · Seed inicial de la key emailjs (vacío · el admin lo completa desde la UI).
+-- enabled: true por defecto · funciona como "envío automático activo".
+-- Si el admin quiere pausar temporalmente sin borrar credenciales, desmarca
+-- el checkbox en /admin/config.
 insert into public.config (key, value) values
   ('emailjs', '{
     "service_id": "",
     "template_id": "",
     "public_key": "",
-    "enabled": false
+    "enabled": true
   }'::jsonb)
 on conflict (key) do nothing;
+
+-- Si tu proyecto YA tenía la fila con enabled:false del seed antiguo,
+-- ejecuta este update una sola vez para auto-corregir:
+update public.config
+  set value = jsonb_set(value, '{enabled}', 'true'::jsonb, false)
+  where key = 'emailjs'
+    and (value->>'enabled')::boolean is false
+    and value->>'service_id' is not null
+    and length(value->>'service_id') > 0;
 
 
 -- =============================================================================
