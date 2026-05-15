@@ -7390,9 +7390,14 @@ const PublicLookup = {
       title: 'Denuncia recibida en el sistema',
       desc: `Tu denuncia fue radicada y notificada a las autoridades competentes (${(report.authorities_notified || []).length} destinatarios).`
     });
-    /* Eventos de cambio de estado · solo status_change */
+    /* Eventos de cambio de estado · solo status_change
+       FIX · Audit.log persiste el 4º argumento como `details`, no
+       `metadata`. Antes leía e.metadata (undefined) → "Estado
+       actualizado a 'undefined'". Ahora lee e.details con fallback
+       a e.metadata para tolerar entries antiguas (defensivo). */
     auditEntries.filter(e => e.action === 'status_change').forEach(e => {
-      const meta = e.metadata || {};
+      const meta = e.details || e.metadata || {};
+      if (!meta.to) return; /* no aporta info útil */
       events.push({
         ts: e.timestamp,
         title: 'Estado actualizado a "' + this.statusLabel(meta.to) + '"',
