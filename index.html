@@ -2787,6 +2787,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
           Diagnóstico
         </a>
+        <a class="admin-link" href="#/admin/metricas" data-admin-link="metricas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+          Métricas
+        </a>
       </aside>
       <section class="admin-content" id="admin-content"></section>
     </div>
@@ -3251,6 +3255,7 @@ const Backend = {
         BackendBanner.show('error', 'HTTP ' + r.status);
       }
       Audit.log('backend_wakeup', 'system', null, { ok, duration, status: r.status });
+      if (typeof Metrics !== 'undefined') Metrics.timing('backend_wakeup', duration, { ok, status: r.status });
       return { ok, duration, status: r.status };
     } catch (e) {
       clearTimeout(escalate);
@@ -3260,6 +3265,7 @@ const Backend = {
       this._lastError = e.message || String(e);
       BackendBanner.show('error', this._lastError);
       Audit.log('backend_wakeup', 'system', null, { ok: false, duration, error: this._lastError });
+      if (typeof Metrics !== 'undefined') Metrics.timing('backend_wakeup', duration, { ok: false, error: this._lastError });
       return { ok: false, duration, error: this._lastError };
     }
   },
@@ -3707,6 +3713,47 @@ const AuditRepo = {
       if (error) return { ok: false, error: error.message };
       return { ok: true, total: count || 0 };
     } catch (e) { return { ok: false, error: e.message }; }
+  },
+
+  /* RSK-72 fix · cambios de estado de un reporte legibles públicamente
+     vía view status_changes_public (anónimos pueden consultar). En
+     modo localStorage filtra desde el cache local. Retorna lista
+     ordenada por timestamp ascendente. */
+  async statusChangesFor(radicado) {
+    if (!Backend.isSupabase()) {
+      const log = Persist.get('audit_log', []) || [];
+      const list = log
+        .filter(function(e) {
+          return e.entity === 'report'
+              && e.entity_id === radicado
+              && e.action === 'status_change'
+              && (e.details || e.metadata || {}).to;
+        })
+        .map(function(e) {
+          const det = e.details || e.metadata || {};
+          return {
+            radicado: e.entity_id,
+            changed_at: e.timestamp,
+            new_status: det.to,
+            previous_status: det.from || null
+          };
+        })
+        .sort(function(a, b) { return new Date(a.changed_at) - new Date(b.changed_at); });
+      return { ok: true, items: list };
+    }
+    const client = await Backend.client();
+    if (!client) return { ok: false, error: 'no_client', items: [] };
+    try {
+      const { data, error } = await client
+        .from('status_changes_public')
+        .select('radicado, changed_at, new_status, previous_status')
+        .eq('radicado', radicado)
+        .order('changed_at', { ascending: true });
+      if (error) return { ok: false, error: error.message, items: [] };
+      return { ok: true, items: data || [] };
+    } catch (e) {
+      return { ok: false, error: e.message, items: [] };
+    }
   }
 };
 
@@ -4038,6 +4085,127 @@ const ConfigRepo = {
     if (m.includes('row-level security')) return 'No tienes permisos de admin para modificar la configuración';
     if (m.includes('network')) return 'Error de red al guardar la configuración';
     return err.message || 'Error al guardar configuración';
+  }
+};
+
+/* === D-septim · METRICS · STEP-405/406 · Fase 4 ===
+   Captura simple de performance/uso para análisis académico de la
+   tesis. Persiste en eco.metrics (ring buffer de 500 entradas). No
+   envía a ningún servicio externo · es 100% local + visible en
+   /admin/metricas para que el admin/jurado revise.
+
+   Tres tipos de métrica:
+   - 'timing' · operación + duración ms (wakeup, refresh, sendOne…)
+   - 'event' · marcador de evento (denuncia_enviada, login, etc.)
+   - 'page' · navegación (route + duración hasta renderizado)
+
+   Convenciones:
+   - duration_ms: número entero
+   - context: objeto con info adicional (sin PII)
+   - timestamp: ISO string */
+const Metrics = {
+  CAP: 500,
+  _pageStartMs: 0,
+  _routeStarted: null,
+
+  record(type, name, opts) {
+    opts = opts || {};
+    const entry = {
+      type: type, name: name,
+      timestamp: new Date().toISOString(),
+      duration_ms: typeof opts.duration_ms === 'number' ? Math.round(opts.duration_ms) : null,
+      context: opts.context || {}
+    };
+    const list = Persist.get('metrics', []);
+    list.push(entry);
+    if (list.length > this.CAP) list.splice(0, list.length - this.CAP);
+    Persist.set('metrics', list);
+    Bus.emit('metrics:record', entry);
+    return entry;
+  },
+
+  timing(name, durationMs, context) {
+    return this.record('timing', name, { duration_ms: durationMs, context: context });
+  },
+
+  event(name, context) {
+    return this.record('event', name, { context: context });
+  },
+
+  /* Helper · marca el inicio de un timing por id arbitrario y
+     retorna el ms epoch. Usar con measureEnd(id, name). */
+  measureStart() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  },
+  measureEnd(startedAt, name, context) {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    return this.timing(name, now - startedAt, context);
+  },
+
+  /* Helper que envuelve una promesa y reporta su duración */
+  async measureAsync(name, fn, context) {
+    const t0 = this.measureStart();
+    try {
+      const r = await fn();
+      this.measureEnd(t0, name, Object.assign({ ok: true }, context || {}));
+      return r;
+    } catch (e) {
+      this.measureEnd(t0, name, Object.assign({ ok: false, error: e.message || String(e) }, context || {}));
+      throw e;
+    }
+  },
+
+  /* Marca el inicio de la navegación a una ruta. Router.resolve lo
+     llama al entrar; recordPageRender al terminar el primer render. */
+  recordPageStart(route) {
+    this._pageStartMs = this.measureStart();
+    this._routeStarted = route;
+  },
+  recordPageRender(route) {
+    if (this._routeStarted !== route || !this._pageStartMs) return;
+    const dur = this.measureStart() - this._pageStartMs;
+    this.record('page', route, { duration_ms: dur });
+    this._pageStartMs = 0;
+    this._routeStarted = null;
+  },
+
+  /* Agregaciones para la vista /admin/metricas */
+  summary() {
+    const list = Persist.get('metrics', []) || [];
+    const byName = {};
+    list.forEach(function(m) {
+      if (m.duration_ms === null || m.duration_ms === undefined) return;
+      const k = m.type + ':' + m.name;
+      if (!byName[k]) byName[k] = { type: m.type, name: m.name, count: 0, total: 0, min: Infinity, max: -Infinity };
+      const agg = byName[k];
+      agg.count++; agg.total += m.duration_ms;
+      if (m.duration_ms < agg.min) agg.min = m.duration_ms;
+      if (m.duration_ms > agg.max) agg.max = m.duration_ms;
+    });
+    return Object.values(byName).map(function(a) {
+      return { type: a.type, name: a.name, count: a.count, avg: Math.round(a.total / a.count), min: a.min, max: a.max };
+    }).sort(function(a, b) { return b.count - a.count; });
+  },
+
+  /* Eventos sin duration (counts) */
+  eventCounts() {
+    const list = Persist.get('metrics', []) || [];
+    const counts = {};
+    list.filter(function(m) { return m.type === 'event'; }).forEach(function(m) {
+      counts[m.name] = (counts[m.name] || 0) + 1;
+    });
+    return Object.entries(counts).sort(function(a, b) { return b[1] - a[1]; });
+  },
+
+  recent(limit) {
+    limit = limit || 50;
+    const list = Persist.get('metrics', []) || [];
+    return list.slice(-limit).reverse();
+  },
+
+  clear() {
+    Persist.set('metrics', []);
+    Audit.log('metrics_clear', 'system');
   }
 };
 
@@ -4491,12 +4659,15 @@ const Router = {
     { path: '/admin/config',         view: 'view-admin',          requires: 'admin', adminSub: 'config'  },
     { path: '/admin/exportar',       view: 'view-admin',          requires: 'admin', adminSub: 'export'  },
     { path: '/admin/outbox',         view: 'view-admin',          requires: 'admin', adminSub: 'outbox'  },
-    { path: '/admin/diagnostico',    view: 'view-admin',          requires: 'admin', adminSub: 'diagnostico' }
+    { path: '/admin/diagnostico',    view: 'view-admin',          requires: 'admin', adminSub: 'diagnostico' },
+    { path: '/admin/metricas',       view: 'view-admin',          requires: 'admin', adminSub: 'metricas' }
   ],
   init() { window.addEventListener('hashchange', () => this.resolve()); this.resolve(); },
   navigate(path) { window.location.hash = '#' + path; },
   resolve() {
     const hash = (window.location.hash || '#/').slice(1);
+    /* Métricas · arrancar timing de page-render antes de resolver vista */
+    Metrics.recordPageStart(hash);
     /* STEP-FLOW-REDESIGN · Redirect de rutas obsoletas.
        /denunciar/resultado y /denunciar/score eran "pausas intermedias"
        eliminadas. Si alguien las visita por link viejo, redirigimos al
@@ -4552,7 +4723,12 @@ const Router = {
     FlowStepper.update(hash);
     Skeleton.hide();
     window.scrollTo({ top: 0 });
-  }
+    /* Métricas · tiempo desde inicio de navigate hasta render terminado */
+    Metrics.recordPageRender(hash);
+  },
+
+  /* Wrap de navigate para empezar a medir el page-render. */
+  _origNavigate: null
 };
 
 /* === I · TREE · motor del árbol de decisión === */
@@ -5995,23 +6171,29 @@ const EmailService = {
     if (!cfg.service_id || !cfg.template_id) {
       return { ok: false, error: 'EmailJS sin service_id/template_id configurado' };
     }
+    const t0 = (typeof Metrics !== 'undefined') ? Metrics.measureStart() : Date.now();
     try {
       const params = this._params(item);
       const r = await window.emailjs.send(cfg.service_id, cfg.template_id, params);
-      /* r.status === 200 indica éxito (EmailJS SDK v4) */
+      const dur = ((typeof Metrics !== 'undefined') ? Metrics.measureStart() : Date.now()) - t0;
       if (r && (r.status === 200 || r.text === 'OK')) {
+        if (typeof Metrics !== 'undefined') Metrics.timing('emailjs_send', dur, { ok: true });
         return { ok: true, status: r.status, text: r.text };
       }
+      if (typeof Metrics !== 'undefined') Metrics.timing('emailjs_send', dur, { ok: false, reason: 'unexpected_response' });
       return { ok: false, error: 'Respuesta inesperada: ' + JSON.stringify(r) };
     } catch (e) {
-      /* EmailJS lanza { status, text } o un Error normal */
+      const dur = ((typeof Metrics !== 'undefined') ? Metrics.measureStart() : Date.now()) - t0;
       const msg = e && (e.text || e.message) || String(e);
+      if (typeof Metrics !== 'undefined') Metrics.timing('emailjs_send', dur, { ok: false, error: msg });
       return { ok: false, error: msg };
     }
   },
 
   /* Envío de prueba: usa el primer parámetro como destinatario. No
-     toca el outbox. Útil para validar configuración desde admin. */
+     toca el outbox. Útil para validar configuración desde admin.
+     reply_to se rellena con un valor por defecto · algunos templates
+     fallan silenciosamente si el campo está vacío. */
   async testSend(toEmail) {
     if (!this._initIfNeeded()) {
       return { ok: false, error: 'SDK EmailJS no cargado o public_key faltante' };
@@ -6020,6 +6202,10 @@ const EmailService = {
     if (!cfg.service_id || !cfg.template_id) {
       return { ok: false, error: 'Configura service_id y template_id antes de probar' };
     }
+    const session = Auth.current();
+    const masterEmail = (ConfigRepo.getSync('authorities', {}) || {}).master_email
+                     || (session && session.email)
+                     || 'noreply@eco-complaint.local';
     const item = {
       to: toEmail,
       subject: '[Prueba] Configuración EmailJS · Eco-Complaint',
@@ -6027,7 +6213,12 @@ const EmailService = {
             'Si lo recibes correctamente, las notificaciones de denuncias funcionarán automáticamente.\n\n' +
             'Generado: ' + new Date().toLocaleString('es-CO'),
       report_radicado: 'TEST-' + Date.now(),
-      meta: { to_name: 'Administrador', from_name: 'Eco-Complaint · Test' }
+      meta: {
+        to_name: 'Administrador',
+        from_name: 'Eco-Complaint · Test',
+        reply_to: masterEmail,
+        band_label: 'PRUEBA'
+      }
     };
     return this.sendOne(item);
   }
@@ -6168,6 +6359,7 @@ const Report = {
       emails_count: emailsArray.length, evidence_count: report.evidence.length
     });
     Bus.emit('report:sent', report);
+    if (typeof Metrics !== 'undefined') Metrics.event('report_sent', { band: draft.band, emails: emailsArray.length, evidence: report.evidence.length });
     return report;
   },
 
@@ -7280,15 +7472,29 @@ const PublicLookup = {
     /* Estado intermedio breve (skeleton inline) */
     resultEl.innerHTML = '<div class="consulta-empty"><p class="muted">Consultando…</p></div>';
 
+    /* RSK-72 fix · lookup del reporte público Y status changes en
+       paralelo, mergear para construir el timeline cross-browser.
+       Sin esto, el timeline solo mostraba cambios hechos desde el
+       browser actual. */
     let report = null;
+    let statusChanges = [];
     try {
-      report = await ReportsRepo.publicLookup(radicado);
+      const [r1, r2] = await Promise.all([
+        ReportsRepo.publicLookup(radicado),
+        AuditRepo.statusChangesFor(radicado)
+      ]);
+      report = r1;
+      statusChanges = (r2 && r2.items) || [];
     } catch (e) {
       Toast.show('Error consultando · ' + (e.message || e), 'error');
       resultEl.innerHTML = '';
       return;
     }
-    Audit.log('public_lookup', 'report', radicado, { found: !!report, backend: Backend.isSupabase() ? 'supabase' : 'localStorage' });
+    Audit.log('public_lookup', 'report', radicado, {
+      found: !!report,
+      backend: Backend.isSupabase() ? 'supabase' : 'localStorage',
+      status_changes: statusChanges.length
+    });
 
     if (!report) {
       resultEl.innerHTML = `
@@ -7303,8 +7509,8 @@ const PublicLookup = {
       `;
       return;
     }
-    /* Renderizar tarjeta de estado + timeline */
-    resultEl.innerHTML = this.renderResult(report);
+    /* Renderizar tarjeta de estado + timeline · statusChanges como 2º arg */
+    resultEl.innerHTML = this.renderResult(report, statusChanges);
     this.bindResultActions(report);
   },
 
@@ -7360,32 +7566,52 @@ const PublicLookup = {
     }
   },
 
-  renderResult(report) {
+  renderResult(report, statusChanges) {
     const delitos = Persist.get('delitos');
     const status = report.status || 'received';
     const created = new Date(report.created_at);
     const diasDesde = Math.floor((Date.now() - created.getTime()) / 86400000);
     const diasStr = diasDesde === 0 ? 'hoy' : (diasDesde === 1 ? 'hace 1 día' : `hace ${diasDesde} días`);
 
-    /* Timeline desde audit_log: report_send + status_change(s) */
-    const auditEntries = Persist.get('audit_log', [])
-      .filter(e => e.entity === 'report' && e.entity_id === report.radicado)
-      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    /* RSK-72 fix · timeline desde la lista mergeada server + local.
+       statusChanges viene de AuditRepo.statusChangesFor (view pública
+       en modo Supabase, cache local en modo localStorage). Si por
+       cualquier razón llegó vacío, se usa fallback al cache local
+       directo para entries que estén ahí pero no en el server. */
+    let serverChanges = Array.isArray(statusChanges) ? statusChanges.slice() : [];
+    if (serverChanges.length === 0) {
+      const log = Persist.get('audit_log', []) || [];
+      serverChanges = log
+        .filter(function(e) {
+          return e.entity === 'report'
+              && e.entity_id === report.radicado
+              && e.action === 'status_change';
+        })
+        .map(function(e) {
+          const det = e.details || e.metadata || {};
+          return { changed_at: e.timestamp, new_status: det.to, previous_status: det.from || null };
+        });
+    }
+    /* Ordenar por timestamp ascendente y filtrar entries sin status */
+    serverChanges = serverChanges
+      .filter(function(c) { return c.new_status; })
+      .sort(function(a, b) { return new Date(a.changed_at) - new Date(b.changed_at); });
 
     const events = [];
     /* Evento de creación · siempre primero */
     events.push({
       ts: report.created_at,
       title: 'Denuncia recibida en el sistema',
-      desc: `Tu denuncia fue radicada y notificada a las autoridades competentes (${(report.authorities_notified || []).length} destinatarios).`
+      desc: 'Tu denuncia fue radicada y notificada a las autoridades competentes' +
+            (report.authorities_notified ? ' (' + report.authorities_notified.length + ' destinatarios).' : '.')
     });
-    /* Eventos de cambio de estado · solo status_change */
-    auditEntries.filter(e => e.action === 'status_change').forEach(e => {
-      const meta = e.metadata || {};
+    /* Eventos de cambio de estado */
+    const self = this;
+    serverChanges.forEach(function(c) {
       events.push({
-        ts: e.timestamp,
-        title: 'Estado actualizado a "' + this.statusLabel(meta.to) + '"',
-        desc: this.statusDescription(meta.to)
+        ts: c.changed_at,
+        title: 'Estado actualizado a "' + self.statusLabel(c.new_status) + '"',
+        desc: self.statusDescription(c.new_status)
       });
     });
     /* Marcar el último como actual */
@@ -8412,21 +8638,27 @@ const Admin = {
             <span id="cfg-ej-result" class="soft" style="font-size: 13px; align-self: center"></span>
           </div>
           <details style="margin-top: 12px">
-            <summary style="cursor: pointer; font-size: 13px; color: var(--text-soft)">¿Qué variables debe aceptar el template HTML?</summary>
-            <div style="padding: 12px 0; font-size: 12px; color: var(--text-soft)">
-              El template configurado en el dashboard de EmailJS debería usar estas variables:
-              <ul style="margin: 8px 0 0 18px; line-height: 1.7">
+            <summary style="cursor: pointer; font-size: 13px; color: var(--text-soft)">¿Cómo configurar el template HTML en EmailJS?</summary>
+            <div style="padding: 12px 0; font-size: 12px; color: var(--text-soft); line-height: 1.6">
+              <p style="margin: 0 0 8px"><strong>Pasos rápidos:</strong></p>
+              <ol style="margin: 0 0 12px 18px">
+                <li>Ve a tu template en <a href="https://dashboard.emailjs.com/admin/templates" target="_blank" rel="noopener" style="color: var(--brand-deep); font-weight: 600">dashboard.emailjs.com/admin/templates</a></li>
+                <li>En <strong>Settings</strong>: <code>To Email</code> = <code>{{to_email}}</code>, <code>From Name</code> = <code>{{from_name}}</code>, <code>Subject</code> = <code>{{subject}}</code>, <code>Reply To</code> = <code>{{reply_to}}</code></li>
+                <li>En <strong>Content</strong>: pega el HTML completo desde <a href="https://github.com/htc480/eco-complaint/blob/main/docs/fase-3-emailjs-template-guide.md" target="_blank" rel="noopener" style="color: var(--brand-deep); font-weight: 600">docs/fase-3-emailjs-template-guide.md</a></li>
+                <li>Click <strong>Save Changes</strong> y vuelve a probar aquí</li>
+              </ol>
+              <p style="margin: 0 0 6px"><strong>Variables disponibles en el template:</strong></p>
+              <ul style="margin: 0 0 0 18px">
                 <li><code>{{to_email}}</code> · destinatario</li>
-                <li><code>{{to_name}}</code> · nombre del destinatario (por defecto "Autoridad ambiental")</li>
+                <li><code>{{to_name}}</code> · nombre del destinatario ("Autoridad ambiental")</li>
                 <li><code>{{from_name}}</code> · "Eco-Complaint"</li>
                 <li><code>{{subject}}</code> · asunto del correo</li>
                 <li><code>{{radicado}}</code> · número de radicado</li>
-                <li><code>{{band_label}}</code> · banda de riesgo en texto (Bajo/Medio/Alto/Crítico/Extremo)</li>
-                <li><code>{{body}}</code> · cuerpo completo de la denuncia (texto plano multilínea)</li>
+                <li><code>{{band_label}}</code> · Bajo / Medio / Alto / Crítico / Extremo</li>
+                <li><code>{{body}}</code> · cuerpo completo (texto plano multilínea)</li>
                 <li><code>{{consulta_url}}</code> · URL pública para consultar el estado</li>
                 <li><code>{{reply_to}}</code> · correo maestro de radicación</li>
               </ul>
-              Si tu template usa otros nombres, ajusta <code>EmailService._params()</code> en el código.
             </div>
           </details>
         </div>`;
@@ -8533,8 +8765,15 @@ const Admin = {
         try {
           const r = await EmailService.testSend(target);
           if (r.ok) {
-            if (result) result.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ Correo enviado a ' + target + '</span>';
-            Toast.show('Correo de prueba enviado · revisa la bandeja de ' + target);
+            if (result) result.innerHTML =
+              '<div style="color: var(--brand-deep); font-weight: 600; margin-bottom: 6px">✓ EmailJS aceptó el envío a ' + target + '</div>' +
+              '<div class="soft" style="font-size: 11px; line-height: 1.5; color: var(--text-soft)">' +
+              'Si NO llega en 1-2 minutos:' +
+              '<br>• Revisa <strong>Spam</strong> y la pestaña <strong>Promociones</strong> de la bandeja.' +
+              '<br>• Verifica que el template tenga <code>{{to_email}}</code> en el campo <strong>"To Email"</strong> del dashboard de EmailJS.' +
+              '<br>• Si el destinatario es la misma cuenta vinculada a EmailJS, Gmail puede no entregárselo a sí mismo · prueba con otro email.' +
+              '</div>';
+            Toast.show('EmailJS reportó OK · si no llega, revisa el template y la carpeta de spam', 'ok', 5000);
             Audit.log('emailjs_test_send', 'system', null, { to: target, ok: true });
           } else {
             if (result) result.innerHTML = '<span style="color: var(--alarm)">✗ ' + r.error + '</span>';
@@ -9244,6 +9483,117 @@ const Admin = {
     }
   },
 
+  /* ------ MÉTRICAS · STEP-405/406 · Fase 4 ------
+     Visualiza la captura local de Metrics. Útil para análisis
+     académico durante la defensa de tesis: muestra agregados de
+     timings (wakeup, refresh, sendOne, page-render), contadores
+     de eventos (denuncias enviadas, logins, etc.) y últimas 50
+     entradas crudas para inspección. */
+  metricas: {
+    render(root) {
+      const summary = Metrics.summary();
+      const events = Metrics.eventCounts();
+      const recent = Metrics.recent(50);
+      const all = Persist.get('metrics', []) || [];
+
+      const timingRows = summary.length === 0
+        ? '<tr><td colspan="6" class="muted center" style="padding:20px">Sin datos · navega y opera la app para acumular métricas</td></tr>'
+        : summary.map(function(s) {
+            return '<tr>' +
+              '<td class="mono" style="font-size:11px">' + s.type + '</td>' +
+              '<td><strong>' + s.name + '</strong></td>' +
+              '<td class="center">' + s.count + '</td>' +
+              '<td class="center mono">' + s.avg + ' ms</td>' +
+              '<td class="center mono soft">' + s.min + ' ms</td>' +
+              '<td class="center mono soft">' + s.max + ' ms</td>' +
+              '</tr>';
+          }).join('');
+
+      const eventRows = events.length === 0
+        ? '<tr><td colspan="2" class="muted center" style="padding:20px">Sin eventos</td></tr>'
+        : events.map(function(e) {
+            return '<tr><td><strong>' + e[0] + '</strong></td><td class="center mono">' + e[1] + '</td></tr>';
+          }).join('');
+
+      const recentRows = recent.length === 0
+        ? '<tr><td colspan="4" class="muted center" style="padding:20px">Sin entradas</td></tr>'
+        : recent.map(function(m) {
+            const ts = new Date(m.timestamp).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+            const ctx = m.context && Object.keys(m.context).length > 0
+              ? '<code style="font-size:11px;color:var(--text-soft)">' + JSON.stringify(m.context) + '</code>'
+              : '<span class="muted">—</span>';
+            return '<tr>' +
+              '<td class="mono" style="font-size:11px">' + ts + '</td>' +
+              '<td class="mono" style="font-size:11px">' + m.type + '</td>' +
+              '<td><strong>' + m.name + '</strong>' + (m.duration_ms !== null && m.duration_ms !== undefined ? ' <span class="mono soft" style="font-size:11px">(' + m.duration_ms + ' ms)</span>' : '') + '</td>' +
+              '<td>' + ctx + '</td>' +
+              '</tr>';
+          }).join('');
+
+      root.innerHTML = `
+        <div class="admin-content-head">
+          <div>
+            <h2>Métricas locales</h2>
+            <p>Captura performance/uso para análisis académico · ${all.length} entrada${all.length!==1?'s':''} acumulada${all.length!==1?'s':''} (cap ${Metrics.CAP})</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-soft btn-sm" id="metrics-export">⤓ Exportar JSON</button>
+            <button class="btn btn-ghost btn-sm" id="metrics-clear" style="color: var(--alarm); border-color: var(--alarm-soft)">⚠ Limpiar</button>
+          </div>
+        </div>
+
+        <div class="dash-card">
+          <h4>Tiempos agregados (timings + page renders)</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 16px">Operaciones medidas durante la sesión actual. avg/min/max en milisegundos · si avg > 1000ms revisar conectividad o cold-start del backend.</p>
+          <table class="admin-table">
+            <thead><tr><th>Tipo</th><th>Operación</th><th>Veces</th><th>Promedio</th><th>Mín</th><th>Máx</th></tr></thead>
+            <tbody>${timingRows}</tbody>
+          </table>
+        </div>
+
+        <div class="dash-card">
+          <h4>Contadores de eventos</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 16px">Eventos sin duración asociada (acciones discretas).</p>
+          <table class="admin-table">
+            <thead><tr><th>Evento</th><th class="center">Conteo</th></tr></thead>
+            <tbody>${eventRows}</tbody>
+          </table>
+        </div>
+
+        <div class="dash-card">
+          <h4>Últimas 50 entradas (orden inverso)</h4>
+          <table class="admin-table" style="font-size: 12px">
+            <thead><tr><th>Cuándo</th><th>Tipo</th><th>Nombre / Duración</th><th>Contexto</th></tr></thead>
+            <tbody>${recentRows}</tbody>
+          </table>
+        </div>
+      `;
+
+      const exportBtn = document.getElementById('metrics-export');
+      if (exportBtn) exportBtn.onclick = function() {
+        const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'eco-complaint-metrics.json';
+        a.click();
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+        Audit.log('metrics_export', 'system');
+      };
+      const clearBtn = document.getElementById('metrics-clear');
+      if (clearBtn) clearBtn.onclick = async function() {
+        const ok = await Modal.confirm({
+          title: 'Limpiar métricas locales',
+          body: 'Borra eco.metrics del navegador. La captura se reinicia desde cero. NO afecta al server ni a la auditoría. ¿Continuar?',
+          confirmText: 'Sí, limpiar',
+          danger: true
+        });
+        if (!ok) return;
+        Metrics.clear();
+        Admin.metricas.render(root);
+      };
+    }
+  },
+
   /* ------ Helpers compartidos ------ */
   statusLabel(s) {
     const map = { received: 'recibida', triaged: 'triada', in_progress: 'en progreso', resolved: 'resuelta' };
@@ -9865,8 +10215,16 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.18.0', step: 'STEP-301..308' });
-    console.log('%cEco-Complaint · v0.18.0 · Fase 3 (EmailJS · notificaciones reales) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage') + ' · EmailJS ' + (EmailService.isConfigured() ? 'activo' : 'no-config'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.19.0', step: 'RSK-72-fix + Fase-4-incremental' });
+    console.log('%cEco-Complaint · v0.19.0 · audit cross-browser + métricas locales · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage') + ' · EmailJS ' + (EmailService.isConfigured() ? 'activo' : 'no-config'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    /* Métrica de boot: tiempo total del init */
+    if (typeof Metrics !== 'undefined' && window.performance && performance.timing) {
+      const navStart = performance.timing.navigationStart || (Date.now() - 1000);
+      Metrics.timing('app_init', Date.now() - navStart, {
+        backend: Backend.isSupabase() ? 'supabase' : 'local',
+        emailjs: EmailService.isConfigured() ? 'active' : 'off'
+      });
+    }
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
@@ -9962,6 +10320,57 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.19.0 · RSK-72-fix + Fase-4-incremental · 2026-05-15
+   Cierra dos frentes en un solo PR:
+
+   (A) RSK-72 · audit cross-browser
+   + docs/fase-3-audit-public-view.sql · view status_changes_public
+     con SECURITY INVOKER que expone solo radicado/changed_at/
+     new_status/previous_status (sin user_id ni IP). Policy
+     audit_log_public_status_changes para que anon pueda leer
+     audit_log filtrando entity=report AND action=status_change.
+   + AuditRepo.statusChangesFor(radicado) · server (Supabase) o
+     cache local; siempre retorna lista ordenada ascendente.
+   + PublicLookup.search ahora hace Promise.all de publicLookup +
+     statusChangesFor; renderResult acepta lista mergeada como
+     segundo argumento. Antes leía solo cache local · ahora el
+     timeline se ve desde cualquier browser.
+
+   (B) Fase 4 incremental sin Vite · ADR-17
+   + Decisión documentada: NO migrar a Vite ahora. Mantener
+     single-file (ADR-01) hasta Fase 5 cuando performance real
+     lo justifique con datos. Razones:
+       1. Defensa de tesis · el single-file es defendible y
+          revisable de una sola pasada.
+       2. Build step rompe el "abrir y funcionar" en GitHub
+          Pages que el director ha visto funcionar.
+       3. Las optimizaciones medibles (cache, métricas, lazy)
+          se pueden aplicar sin bundler.
+     Vite queda como opcional en Fase 5 si las métricas de
+     primera carga superan 3s en 3G.
+   + Nuevo módulo Metrics · captura local de timings/eventos/
+     page-renders en ring buffer de 500 entradas:
+       - timing(name, ms, ctx) para operaciones medidas
+       - event(name, ctx) para acciones discretas
+       - measureAsync(name, fn, ctx) para envolver promesas
+       - recordPageStart/recordPageRender desde Router
+   + Conexiones a puntos clave:
+       - app_init (boot total desde navigationStart)
+       - Backend.wakeup (cold-start del backend)
+       - Router.resolve (page-render por ruta)
+       - Report.send (event report_sent con band/emails/evidence)
+       - EmailService.sendOne (round-trip al SDK)
+   + Nueva vista /admin/metricas:
+       - Tabla de timings agregados (count/avg/min/max ms)
+       - Contadores de eventos
+       - Últimas 50 entradas crudas con contexto
+       - Botón "Exportar JSON" para análisis offline (defensa)
+       - Botón "Limpiar" para reset entre demos
+   + Entrada nueva en sidebar admin · sección Operación.
+
+   Estos cambios son aditivos · no modifican comportamiento
+   existente. Sin nuevas dependencias externas.
+
    v0.18.0 · STEP-301..308 · 2026-05-15 · Fase 3 · Envío real (EmailJS)
    STEP-301 · Setup (docs/fase-3-emailjs-setup.sql)
    + SDK EmailJS v4 cargado vía jsdelivr al final del body.
