@@ -5025,7 +5025,14 @@ const Probability = {
   renderCurrent() {
     const draft = Persist.get('draft');
     if (!draft) return;
-    if (!draft.probabilityAnswers) { this.start(); return; }
+    /* FIX · si es la primera vez, start() inicializa probabilityAnswers
+       y probabilityNode. Antes hacía `return` aquí, dejando la vista en
+       blanco. Ahora vuelve a entrar a renderCurrent una vez inicializado
+       (recursión segura: en la 2ª pasada el if-guard ya no aplica). */
+    if (!draft.probabilityAnswers) {
+      this.start();
+      return this.renderCurrent();
+    }
     const idx = draft.probabilityNode;
     const q = this.questions[idx];
 
