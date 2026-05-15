@@ -5816,21 +5816,196 @@ const EvidenceView = {
 };
 
 /* === I.12 · OUTBOX · cola de emails simulados (STEP-004) === */
+/* === I.12 · OUTBOX (refactored STEP-303) ===
+   Cola de correos a enviar. enqueue() persiste localmente; processQueue()
+   los manda vía EmailService cuando EmailJS está configurado. Si no hay
+   configuración, los items quedan 'pending' visibles en /admin/outbox y
+   el admin puede reintentar manualmente cuando configure EmailJS. */
 const Outbox = {
-  enqueue(to, subject, body, report_radicado) {
+  enqueue(to, subject, body, report_radicado, meta) {
     const ob = Persist.get('outbox', []);
     const item = {
       id: 'mail_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-      to, subject, body, report_radicado,
-      sent_at: new Date().toISOString(),
-      status: 'pending' /* En Fase 3 cambia a 'sent' tras EmailJS */
+      to: to, subject: subject, body: body, report_radicado: report_radicado,
+      meta: meta || {},
+      created_at: new Date().toISOString(),
+      sent_at: null,
+      attempts: 0,
+      last_error: null,
+      status: 'pending' /* pending | sending | sent | failed */
     };
     ob.push(item);
     Persist.set('outbox', ob);
     return item;
   },
+
   forReport(radicado) {
-    return Persist.get('outbox', []).filter(m => m.report_radicado === radicado);
+    return Persist.get('outbox', []).filter(function(m) { return m.report_radicado === radicado; });
+  },
+
+  /* Actualiza un item del outbox por id. Pasa solo los campos que cambian. */
+  update(id, patch) {
+    const ob = Persist.get('outbox', []);
+    const idx = ob.findIndex(function(m) { return m.id === id; });
+    if (idx === -1) return null;
+    ob[idx] = Object.assign({}, ob[idx], patch);
+    Persist.set('outbox', ob);
+    return ob[idx];
+  },
+
+  /* Procesa todos los items pending con EmailService. Devuelve resumen
+     { sent, failed, skipped }. Si EmailService no está configurado,
+     todos quedan skipped (siguen pending para reintento manual). */
+  async processQueue(opts) {
+    opts = opts || {};
+    const onProgress = opts.onProgress || function(){};
+    const ob = Persist.get('outbox', []);
+    const pending = ob.filter(function(m) { return m.status === 'pending'; });
+    const result = { total: pending.length, sent: 0, failed: 0, skipped: 0 };
+    if (pending.length === 0) return result;
+    if (!EmailService.isConfigured()) {
+      result.skipped = pending.length;
+      return result;
+    }
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      this.update(item.id, { status: 'sending', attempts: (item.attempts || 0) + 1 });
+      try {
+        const r = await EmailService.sendOne(item);
+        if (r.ok) {
+          this.update(item.id, { status: 'sent', sent_at: new Date().toISOString(), last_error: null });
+          result.sent++;
+        } else {
+          this.update(item.id, { status: 'failed', last_error: r.error });
+          result.failed++;
+        }
+      } catch (e) {
+        this.update(item.id, { status: 'failed', last_error: e.message || String(e) });
+        result.failed++;
+      }
+      onProgress({ done: i + 1, total: pending.length, sent: result.sent, failed: result.failed });
+    }
+    Audit.log('outbox_process', 'system', null, result);
+    Bus.emit('outbox:processed', result);
+    return result;
+  },
+
+  /* Reintenta un item failed o uno individual aún pending. */
+  async retry(id) {
+    const ob = Persist.get('outbox', []);
+    const item = ob.find(function(m) { return m.id === id; });
+    if (!item) return { ok: false, error: 'no_item' };
+    if (item.status === 'sent') return { ok: true, alreadySent: true };
+    if (!EmailService.isConfigured()) return { ok: false, error: 'no_config' };
+    this.update(id, { status: 'sending', attempts: (item.attempts || 0) + 1 });
+    try {
+      const r = await EmailService.sendOne(item);
+      if (r.ok) {
+        this.update(id, { status: 'sent', sent_at: new Date().toISOString(), last_error: null });
+        return { ok: true };
+      }
+      this.update(id, { status: 'failed', last_error: r.error });
+      return { ok: false, error: r.error };
+    } catch (e) {
+      this.update(id, { status: 'failed', last_error: e.message || String(e) });
+      return { ok: false, error: e.message || String(e) };
+    }
+  }
+};
+
+/* === I.12b · EmailService · wrapper sobre EmailJS SDK (STEP-301) ====
+   Lee credenciales desde ConfigRepo.get('emailjs') · NO hardcodeadas.
+   El admin las configura desde /admin/config. Si no están configuradas
+   los emails quedan 'pending' en el outbox y el admin los manda cuando
+   configure. */
+const EmailService = {
+  _ready: false,
+
+  /* True si el SDK cargó Y las credenciales están en config. */
+  isConfigured() {
+    if (typeof window.emailjs === 'undefined') return false;
+    const cfg = ConfigRepo.getSync('emailjs', {}) || {};
+    return !!(cfg.service_id && cfg.template_id && cfg.public_key && cfg.enabled !== false);
+  },
+
+  /* Inicializa el SDK con la public_key. Idempotente. */
+  _initIfNeeded() {
+    if (this._ready) return true;
+    if (typeof window.emailjs === 'undefined') return false;
+    const cfg = ConfigRepo.getSync('emailjs', {}) || {};
+    if (!cfg.public_key) return false;
+    try {
+      window.emailjs.init({ publicKey: cfg.public_key });
+      this._ready = true;
+      return true;
+    } catch (e) { console.warn('[EmailService] init failed:', e); return false; }
+  },
+
+  /* Mapeo del item del outbox a los template_params de EmailJS.
+     El template del usuario debería aceptar estas variables. Si tu
+     template usa otros nombres, ajusta este mapeo y/o agrega los
+     campos faltantes a tu template en el dashboard de EmailJS. */
+  _params(item) {
+    const meta = item.meta || {};
+    const consulta_url = (location.protocol === 'http:' || location.protocol === 'https:')
+      ? location.origin + location.pathname + '#/consulta?radicado=' + encodeURIComponent(item.report_radicado || '')
+      : '';
+    return {
+      to_email:     item.to,
+      to_name:      meta.to_name || 'Autoridad ambiental',
+      from_name:    meta.from_name || 'Eco-Complaint',
+      reply_to:     meta.reply_to || '',
+      subject:      item.subject,
+      radicado:     item.report_radicado || '',
+      band_label:   meta.band_label || '',
+      body:         item.body,
+      consulta_url: consulta_url
+    };
+  },
+
+  async sendOne(item) {
+    if (!this._initIfNeeded()) {
+      return { ok: false, error: 'EmailService no inicializado (revisa SDK y config)' };
+    }
+    const cfg = ConfigRepo.getSync('emailjs', {}) || {};
+    if (!cfg.service_id || !cfg.template_id) {
+      return { ok: false, error: 'EmailJS sin service_id/template_id configurado' };
+    }
+    try {
+      const params = this._params(item);
+      const r = await window.emailjs.send(cfg.service_id, cfg.template_id, params);
+      /* r.status === 200 indica éxito (EmailJS SDK v4) */
+      if (r && (r.status === 200 || r.text === 'OK')) {
+        return { ok: true, status: r.status, text: r.text };
+      }
+      return { ok: false, error: 'Respuesta inesperada: ' + JSON.stringify(r) };
+    } catch (e) {
+      /* EmailJS lanza { status, text } o un Error normal */
+      const msg = e && (e.text || e.message) || String(e);
+      return { ok: false, error: msg };
+    }
+  },
+
+  /* Envío de prueba: usa el primer parámetro como destinatario. No
+     toca el outbox. Útil para validar configuración desde admin. */
+  async testSend(toEmail) {
+    if (!this._initIfNeeded()) {
+      return { ok: false, error: 'SDK EmailJS no cargado o public_key faltante' };
+    }
+    const cfg = ConfigRepo.getSync('emailjs', {}) || {};
+    if (!cfg.service_id || !cfg.template_id) {
+      return { ok: false, error: 'Configura service_id y template_id antes de probar' };
+    }
+    const item = {
+      to: toEmail,
+      subject: '[Prueba] Configuración EmailJS · Eco-Complaint',
+      body: 'Este es un correo de prueba enviado desde el panel de administración de Eco-Complaint.\n\n' +
+            'Si lo recibes correctamente, las notificaciones de denuncias funcionarán automáticamente.\n\n' +
+            'Generado: ' + new Date().toLocaleString('es-CO'),
+      report_radicado: 'TEST-' + Date.now(),
+      meta: { to_name: 'Administrador', from_name: 'Eco-Complaint · Test' }
+    };
+    return this.sendOne(item);
   }
 };
 
@@ -5905,7 +6080,26 @@ const Report = {
     /* Email body · STEP-204 ahora async porque incluye signed URLs */
     const subject = `[${radicado}] Denuncia ambiental · ${Risk.bandLabel(draft.band)}`;
     const body = await this.buildEmailBody(draft, radicado);
-    emailsArray.forEach(email => Outbox.enqueue(email, subject, body, radicado));
+    /* STEP-302 · meta enriquece template_params de EmailJS para que el
+       template del usuario pueda usar {{band_label}}, {{from_name}}, etc. */
+    const meta = {
+      band_label: Risk.bandLabel(draft.band),
+      from_name: 'Eco-Complaint',
+      reply_to: masterEmail || ''
+    };
+    emailsArray.forEach(function(email) {
+      Outbox.enqueue(email, subject, body, radicado, Object.assign({}, meta, { to_name: 'Autoridad ambiental' }));
+    });
+    /* Disparar processQueue inmediatamente (no bloquear el flujo de
+       redirect a /denunciar/enviado; el usuario verá el estado del
+       envío en /admin/outbox). Si EmailService no está configurado,
+       los items quedan 'pending' y el admin los procesa cuando configure. */
+    if (EmailService.isConfigured()) {
+      Outbox.processQueue().then(function(r) {
+        if (r.sent > 0) Toast.show('✓ ' + r.sent + ' notificación(es) enviada(s) a autoridades', 'ok', 3500);
+        if (r.failed > 0) Toast.show('⚠ ' + r.failed + ' envío(s) fallaron · revisa /admin/outbox', 'error', 5000);
+      }).catch(function(e) { console.warn('[Outbox.processQueue]', e); });
+    }
 
     /* Crear report · STEP-203: limpiar _previewDataUrl (cache local
        de preview durante el flujo) antes de persistir, para no
@@ -8130,6 +8324,89 @@ const Admin = {
             </div>` : ''}
         </div>
 
+        ${(function() {
+          /* STEP-302 · Sección EmailJS (notificaciones reales por correo) */
+          const ec = ConfigRepo.getSync('emailjs', {}) || {};
+          const sdkLoaded = typeof window.emailjs !== 'undefined';
+          const configured = EmailService.isConfigured();
+          const statusLabel = !sdkLoaded ? 'SDK no cargado'
+            : !configured ? 'No configurado'
+            : 'Activo';
+          const statusCls = !sdkLoaded ? 'err' : (!configured ? 'warm' : 'ok');
+          return `
+        <div class="dash-card" id="cfg-emailjs-card">
+          <h4>Notificaciones por correo · EmailJS · Fase 3</h4>
+          <p class="soft" style="font-size: 13px; margin-bottom: 16px">
+            Cuando una denuncia se envía, las autoridades reciben el correo automáticamente
+            vía <a href="https://www.emailjs.com" target="_blank" rel="noopener" style="color: var(--brand-deep); font-weight: 600">EmailJS</a>.
+            Si no configuras esto, los correos quedan en la cola
+            <a href="#/admin/outbox" style="color: var(--brand-deep); font-weight: 600">/admin/outbox</a>
+            y los puedes procesar después.
+          </p>
+          <div class="backend-status-grid">
+            <div class="backend-status-cell">
+              <div class="lbl">SDK</div>
+              <div class="val"><strong>${sdkLoaded ? '✓ Cargado' : '✗ No disponible'}</strong></div>
+            </div>
+            <div class="backend-status-cell">
+              <div class="lbl">Estado</div>
+              <div class="val"><span class="backend-status-pill" data-cls="${statusCls}">${statusLabel}</span></div>
+            </div>
+            <div class="backend-status-cell">
+              <div class="lbl">Cuota free</div>
+              <div class="val mono">200 emails/mes</div>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px">
+            <div>
+              <label class="label" for="cfg-ej-service">Service ID</label>
+              <input class="input mono" id="cfg-ej-service" placeholder="service_xxxxxxx" value="${ec.service_id || ''}" autocomplete="off">
+            </div>
+            <div>
+              <label class="label" for="cfg-ej-template">Template ID</label>
+              <input class="input mono" id="cfg-ej-template" placeholder="template_xxxxxxx" value="${ec.template_id || ''}" autocomplete="off">
+            </div>
+            <div style="grid-column: 1 / -1">
+              <label class="label" for="cfg-ej-pubkey">Public Key</label>
+              <input class="input mono" id="cfg-ej-pubkey" placeholder="abc123..." value="${ec.public_key || ''}" autocomplete="off">
+              <p class="soft" style="font-size: 11px; margin-top: 4px">
+                Es pública por diseño (similar a la anon key de Supabase). El secreto real
+                vive en el dashboard de EmailJS.
+              </p>
+            </div>
+            <div style="grid-column: 1 / -1">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-soft); cursor: pointer">
+                <input type="checkbox" id="cfg-ej-enabled" ${ec.enabled !== false ? 'checked' : ''}>
+                <span><strong>Habilitar envío automático.</strong> Si desactivas, los correos se encolan pero no se mandan hasta que reactives.</span>
+              </label>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px">
+            <button class="btn btn-primary btn-sm" id="cfg-ej-save">💾 Guardar EmailJS</button>
+            <button class="btn btn-soft btn-sm" id="cfg-ej-test" ${configured ? '' : 'disabled title="Guarda los 3 campos primero"'}>📨 Probar configuración</button>
+            <span id="cfg-ej-result" class="soft" style="font-size: 13px; align-self: center"></span>
+          </div>
+          <details style="margin-top: 12px">
+            <summary style="cursor: pointer; font-size: 13px; color: var(--text-soft)">¿Qué variables debe aceptar el template HTML?</summary>
+            <div style="padding: 12px 0; font-size: 12px; color: var(--text-soft)">
+              El template configurado en el dashboard de EmailJS debería usar estas variables:
+              <ul style="margin: 8px 0 0 18px; line-height: 1.7">
+                <li><code>{{to_email}}</code> · destinatario</li>
+                <li><code>{{to_name}}</code> · nombre del destinatario (por defecto "Autoridad ambiental")</li>
+                <li><code>{{from_name}}</code> · "Eco-Complaint"</li>
+                <li><code>{{subject}}</code> · asunto del correo</li>
+                <li><code>{{radicado}}</code> · número de radicado</li>
+                <li><code>{{band_label}}</code> · banda de riesgo en texto (Bajo/Medio/Alto/Crítico/Extremo)</li>
+                <li><code>{{body}}</code> · cuerpo completo de la denuncia (texto plano multilínea)</li>
+                <li><code>{{consulta_url}}</code> · URL pública para consultar el estado</li>
+                <li><code>{{reply_to}}</code> · correo maestro de radicación</li>
+              </ul>
+              Si tu template usa otros nombres, ajusta <code>EmailService._params()</code> en el código.
+            </div>
+          </details>
+        </div>`;
+        })()}
+
         <div class="dash-card">
           <h4>Datos públicos de contacto</h4>
           <p class="soft" style="font-size: 13px; margin-bottom: 16px">Esta información aparece en la página pública de contacto (/contacto) para que cualquier visitante pueda comunicarse con la entidad operadora.</p>
@@ -8186,6 +8463,63 @@ const Admin = {
           <button class="btn btn-primary btn-lg" id="cfg-save-btn">💾 Guardar configuración</button>
         </div>
       `;
+
+      /* STEP-302 · Handlers EmailJS */
+      const ejSaveBtn = document.getElementById('cfg-ej-save');
+      if (ejSaveBtn) ejSaveBtn.onclick = async function() {
+        const newCfg = {
+          service_id:  (document.getElementById('cfg-ej-service') || {}).value.trim(),
+          template_id: (document.getElementById('cfg-ej-template') || {}).value.trim(),
+          public_key:  (document.getElementById('cfg-ej-pubkey') || {}).value.trim(),
+          enabled:     (document.getElementById('cfg-ej-enabled') || {}).checked !== false
+        };
+        const result = document.getElementById('cfg-ej-result');
+        ejSaveBtn.disabled = true;
+        const origTxt = ejSaveBtn.textContent;
+        ejSaveBtn.textContent = '⏳ Guardando…';
+        try {
+          await ConfigRepo.set('emailjs', newCfg);
+          EmailService._ready = false; /* fuerza re-init con la nueva public_key */
+          EmailService._initIfNeeded();
+          if (result) result.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ Guardado</span>';
+          setTimeout(function() { Admin.config.render(root); }, 1200);
+        } catch (err) {
+          Toast.show('No se pudo guardar EmailJS: ' + (err.message || err), 'error');
+          if (result) result.innerHTML = '<span style="color: var(--alarm)">✗ ' + (err.message || err) + '</span>';
+        } finally {
+          ejSaveBtn.disabled = false;
+          ejSaveBtn.textContent = origTxt;
+        }
+      };
+      const ejTestBtn = document.getElementById('cfg-ej-test');
+      if (ejTestBtn) ejTestBtn.onclick = async function() {
+        const session = Auth.current();
+        const defaultTo = (session && session.email) || '';
+        const target = prompt('Enviar correo de prueba a:', defaultTo);
+        if (!target) return;
+        const result = document.getElementById('cfg-ej-result');
+        ejTestBtn.disabled = true;
+        const origTxt = ejTestBtn.textContent;
+        ejTestBtn.textContent = '⏳ Enviando…';
+        if (result) result.textContent = '';
+        try {
+          const r = await EmailService.testSend(target);
+          if (r.ok) {
+            if (result) result.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ Correo enviado a ' + target + '</span>';
+            Toast.show('Correo de prueba enviado · revisa la bandeja de ' + target);
+            Audit.log('emailjs_test_send', 'system', null, { to: target, ok: true });
+          } else {
+            if (result) result.innerHTML = '<span style="color: var(--alarm)">✗ ' + r.error + '</span>';
+            Toast.show('Falló el envío de prueba: ' + r.error, 'error', 5000);
+            Audit.log('emailjs_test_send', 'system', null, { to: target, ok: false, error: r.error });
+          }
+        } catch (e) {
+          if (result) result.innerHTML = '<span style="color: var(--alarm)">✗ ' + (e.message || e) + '</span>';
+        } finally {
+          ejTestBtn.disabled = false;
+          ejTestBtn.textContent = origTxt;
+        }
+      };
 
       /* Handler "Verificar conexión" backend */
       const backendCheckBtn = document.getElementById('cfg-backend-check');
@@ -8345,70 +8679,121 @@ const Admin = {
   outbox: {
     render(root) {
       const outbox = Persist.get('outbox', []).slice().reverse();
-      const pending = outbox.filter(m => m.status === 'pending').length;
-      const sent = outbox.filter(m => m.status === 'sent').length;
+      const pending = outbox.filter(function(m) { return m.status === 'pending'; }).length;
+      const sending = outbox.filter(function(m) { return m.status === 'sending'; }).length;
+      const sent    = outbox.filter(function(m) { return m.status === 'sent';    }).length;
+      const failed  = outbox.filter(function(m) { return m.status === 'failed';  }).length;
+      const ejReady = EmailService.isConfigured();
+
+      const statusPill = function(m) {
+        if (m.status === 'sent')    return '<span class="status-pill" data-status="resolved">✓ enviado</span>';
+        if (m.status === 'failed')  return '<span class="status-pill" data-status="received" style="background: var(--alarm-soft); color: var(--alarm)">✗ falló</span>';
+        if (m.status === 'sending') return '<span class="status-pill" data-status="in_progress">⏳ enviando</span>';
+        return '<span class="status-pill" data-status="received">⏸ pendiente</span>';
+      };
 
       root.innerHTML = `
         <div class="admin-content-head">
-          <div><h2>Outbox</h2><p>Cola simulada · ${pending} pendientes · ${sent} marcados como enviados</p></div>
+          <div>
+            <h2>Outbox</h2>
+            <p>${pending} pendiente${pending!==1?'s':''} · ${sending} enviando · ${sent} enviado${sent!==1?'s':''} · ${failed} fallido${failed!==1?'s':''}</p>
+          </div>
           <div class="actions">
-            ${pending > 0 ? `<button class="btn btn-soft btn-sm" id="ob-mark-all">Marcar todos como enviados</button>` : ''}
+            ${(pending > 0 || failed > 0) ? `<button class="btn btn-primary btn-sm" id="ob-process-all" ${ejReady ? '' : 'disabled title="Configura EmailJS en /admin/config primero"'}>📨 Procesar cola ahora</button>` : ''}
           </div>
         </div>
         <div class="dash-card">
-          <p class="soft" style="font-size: 13px; margin-bottom: 16px">📬 En Fase 0 los correos no se envían realmente. En <strong>Fase 3</strong> con EmailJS, esta cola se procesará automáticamente y los estados pasarán a "sent" tras confirmación de la API.</p>
+          ${!ejReady
+            ? `<div class="info-card-soft" style="margin-bottom: 16px; background: var(--warm-soft); border-left: 3px solid var(--warm)">
+                 <p style="font-size: 13px; margin: 0">
+                   ⚠ <strong>EmailJS no está configurado.</strong> Los correos quedan encolados pero no se envían realmente.
+                   Ve a <a href="#/admin/config" style="color: var(--brand-deep); font-weight: 600">/admin/config</a> para configurar service_id, template_id y public_key.
+                 </p>
+               </div>`
+            : `<p class="soft" style="font-size: 13px; margin-bottom: 16px">📨 EmailJS activo · cuando una denuncia se envía, los correos se procesan automáticamente. Aquí puedes ver el historial y reintentar los que fallaron.</p>`
+          }
           ${outbox.length === 0
             ? `<div class="empty-state"><h4>Cola vacía</h4><p>Cuando se envíen denuncias aparecerán aquí los correos generados.</p></div>`
             : `<table class="admin-table">
-                <thead><tr><th>Estado</th><th>Para</th><th>Asunto</th><th>Radicado</th><th>Fecha</th><th></th></tr></thead>
+                <thead><tr><th>Estado</th><th>Para</th><th>Asunto</th><th>Radicado</th><th>Intentos</th><th>Creado / Enviado</th><th></th></tr></thead>
                 <tbody>
-                  ${outbox.map(m => `
+                  ${outbox.map(function(m) {
+                    const created = m.created_at || m.sent_at;
+                    const sentTs = m.sent_at;
+                    const dateStr = m.status === 'sent' && sentTs
+                      ? new Date(sentTs).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                      : (created ? new Date(created).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+                    return `
                     <tr>
-                      <td><span class="status-pill" data-status="${m.status === 'sent' ? 'resolved' : 'received'}">${m.status === 'sent' ? '✓ enviado' : '⏳ pendiente'}</span></td>
+                      <td>${statusPill(m)}</td>
                       <td class="mono" style="font-size: 12px">${m.to}</td>
                       <td style="font-size: 13px">${m.subject}</td>
-                      <td class="mono" style="font-size: 12px">${m.report_radicado}</td>
-                      <td style="font-size: 12px">${new Date(m.sent_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                      <td class="mono" style="font-size: 12px">${m.report_radicado || '—'}</td>
+                      <td class="center mono" style="font-size: 12px">${m.attempts || 0}</td>
+                      <td style="font-size: 12px">${dateStr}</td>
                       <td>
                         <button class="btn btn-ghost btn-sm" data-ob-view="${m.id}">Ver</button>
-                        ${m.status === 'pending' ? `<button class="btn btn-soft btn-sm" data-ob-mark="${m.id}">Enviar</button>` : ''}
+                        ${(m.status === 'pending' || m.status === 'failed')
+                          ? `<button class="btn btn-soft btn-sm" data-ob-retry="${m.id}" ${ejReady ? '' : 'disabled'}>${m.status === 'failed' ? '↻ Reintentar' : '▶ Enviar'}</button>`
+                          : ''}
                       </td>
-                    </tr>
-                  `).join('')}
+                    </tr>`;
+                  }).join('')}
                 </tbody>
               </table>`
           }
         </div>
       `;
 
-      root.querySelectorAll('[data-ob-view]').forEach(btn => {
-        btn.onclick = () => {
-          const m = Persist.get('outbox', []).find(x => x.id === btn.dataset.obView);
+      root.querySelectorAll('[data-ob-view]').forEach(function(btn) {
+        btn.onclick = function() {
+          const m = Persist.get('outbox', []).find(function(x) { return x.id === btn.dataset.obView; });
+          const errBox = m.last_error
+            ? '<div style="background: var(--alarm-soft); border-left: 3px solid var(--alarm); padding: 10px 14px; border-radius: 4px; color: var(--alarm); font-size: 12px; margin-bottom: 12px"><strong>Último error:</strong> ' + m.last_error + '</div>'
+            : '';
           Admin.openDrawer(`
             <div class="drawer-head">
               <div><h3 style="margin: 0">${m.subject}</h3><div class="soft mono" style="font-size: 12px">Para: ${m.to}</div></div>
               <button class="btn btn-ghost btn-sm" id="drawer-close">✕</button>
             </div>
             <div class="drawer-body">
+              ${errBox}
               <pre style="white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; background: var(--bg-subtle); padding: 16px; border-radius: 8px">${m.body}</pre>
             </div>
           `);
         };
       });
-      root.querySelectorAll('[data-ob-mark]').forEach(btn => {
-        btn.onclick = () => {
-          const ob = Persist.get('outbox', []);
-          const item = ob.find(x => x.id === btn.dataset.obMark);
-          if (item) { item.status = 'sent'; item.delivered_at = new Date().toISOString(); Persist.set('outbox', ob); }
+
+      /* Reintento individual (pending o failed) */
+      root.querySelectorAll('[data-ob-retry]').forEach(function(btn) {
+        btn.onclick = async function() {
+          btn.disabled = true;
+          const origTxt = btn.textContent;
+          btn.textContent = '⏳';
+          const r = await Outbox.retry(btn.dataset.obRetry);
+          if (r.ok) {
+            Toast.show(r.alreadySent ? 'Ya estaba enviado' : '✓ Enviado');
+          } else {
+            Toast.show('No se pudo enviar: ' + r.error, 'error', 5000);
+            btn.textContent = origTxt;
+            btn.disabled = false;
+          }
           Admin.outbox.render(root);
         };
       });
-      const all = document.getElementById('ob-mark-all');
-      if (all) all.onclick = () => {
-        const ob = Persist.get('outbox', []);
-        ob.forEach(m => { if (m.status === 'pending') { m.status = 'sent'; m.delivered_at = new Date().toISOString(); } });
-        Persist.set('outbox', ob);
-        Toast.show('Todos los correos pendientes marcados como enviados');
+
+      /* Procesar toda la cola */
+      const processAll = document.getElementById('ob-process-all');
+      if (processAll) processAll.onclick = async function() {
+        processAll.disabled = true;
+        const origTxt = processAll.textContent;
+        processAll.textContent = '⏳ Procesando…';
+        const r = await Outbox.processQueue();
+        if (r.sent > 0) Toast.show('✓ ' + r.sent + ' correo(s) enviado(s)');
+        if (r.failed > 0) Toast.show('⚠ ' + r.failed + ' fallaron', 'error', 5000);
+        if (r.skipped > 0) Toast.show('⚠ EmailJS no configurado · ' + r.skipped + ' omitidos', 'error', 5000);
+        processAll.textContent = origTxt;
+        processAll.disabled = false;
         Admin.outbox.render(root);
       };
     }
@@ -9452,8 +9837,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.17.0', step: 'STEP-FLOW-REDESIGN' });
-    console.log('%cEco-Complaint · v0.17.0 · Flujo de denuncia rediseñado (sin pausas intermedias · FlowStepper global) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.18.0', step: 'STEP-301..308' });
+    console.log('%cEco-Complaint · v0.18.0 · Fase 3 (EmailJS · notificaciones reales) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage') + ' · EmailJS ' + (EmailService.isConfigured() ? 'activo' : 'no-config'), 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
@@ -9549,6 +9934,76 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.18.0 · STEP-301..308 · 2026-05-15 · Fase 3 · Envío real (EmailJS)
+   STEP-301 · Setup (docs/fase-3-emailjs-setup.sql)
+   + SDK EmailJS v4 cargado vía jsdelivr al final del body.
+   + Schema update: policy config_public_read extendida a incluir
+     keys 'emailjs', 'authorities', 'storage' (todas legibles por anon
+     porque ninguna es secreta: la public_key es pública por diseño,
+     las direcciones de autoridades son emails institucionales públicos,
+     storage solo expone defaults de UX).
+   + Seed inicial 'emailjs' con valores vacíos para que el admin los
+     complete desde la UI (NO hardcodeados en el HTML · ADR-16).
+   + Módulo EmailService: wrapper sobre window.emailjs SDK.
+     - isConfigured(): SDK cargado Y config.emailjs con los 3 valores
+     - _initIfNeeded(): emailjs.init({publicKey}) idempotente
+     - _params(item): mapeo del outbox item a template_params estándar
+       (to_email, to_name, from_name, subject, radicado, band_label,
+        body, consulta_url, reply_to)
+     - sendOne(item): llama emailjs.send con error handling
+     - testSend(toEmail): envío de prueba sin tocar el outbox
+
+   STEP-302+303 · Outbox + Report.send refactored
+   + Outbox.enqueue agrega meta (band_label, from_name, reply_to) y
+     campos nuevos: created_at, sent_at, attempts, last_error, status.
+   + Status passes: pending → sending → sent | failed (antes solo
+     pending/sent simulado).
+   + Outbox.processQueue(): procesa todos los pending llamando
+     EmailService.sendOne. Resumen { sent, failed, skipped }.
+     Skipped si EmailService.isConfigured() es false.
+   + Outbox.retry(id): reintenta uno individual (failed o pending).
+   + Outbox.update(id, patch): mutación granular.
+   + Report.send() · tras enqueue dispara processQueue() async; los
+     toasts informan al usuario en tiempo real del resultado. No
+     bloquea el redirect a /denunciar/enviado.
+
+   STEP-304 · UI /admin/outbox rediseñada
+   + 4 contadores: pendiente · enviando · enviado · fallido
+   + Botón "Procesar cola ahora" (deshabilitado si EmailJS no config)
+   + Banner amarillo si EmailJS no está configurado, con link a /admin/config
+   + Tabla con columnas nuevas: intentos, fecha (creado o enviado según status)
+   + Botones por fila: "Ver" (drawer con cuerpo + último error si failed)
+     y "↻ Reintentar" / "▶ Enviar" según status
+   + Drawer muestra el last_error destacado en rojo
+
+   STEP-305 · Variables del template del email
+   + EmailService._params() expone:
+     to_email, to_name, from_name, reply_to, subject, radicado,
+     band_label, body, consulta_url
+   + consulta_url se construye dinámicamente desde location.origin
+   + Sección expandible en /admin/config documenta qué variables
+     debe usar el template HTML del usuario en el dashboard de EmailJS
+
+   STEP-302 · Sección "Notificaciones por correo" en /admin/config
+   + Estado actual: SDK cargado, configurado/no, cuota free 200/mes
+   + 3 campos input editables (service_id, template_id, public_key)
+   + Checkbox enabled (true por defecto)
+   + Botón "Guardar EmailJS" · usa ConfigRepo.set('emailjs', ...) que
+     escribe a Postgres con RLS admin_write
+   + Botón "Probar configuración" · prompt para email, envía testSend
+     y muestra resultado inline
+   + Disclaimer sobre public_key (pública por diseño)
+
+   ADR-16 · EmailJS keys NO se hardcodean
+   + service_id, template_id, public_key viven SOLO en la tabla config
+     de Supabase, editables desde /admin/config. Razones:
+       1. Permite cambiar credenciales sin redesplegar el HTML
+       2. Permite múltiples entornos (dev/staging/prod) compartiendo HTML
+       3. Si el repo es público, el HTML no expone los IDs (aunque sean
+          identificadores no secretos, mejor mantenerlos fuera del código)
+       4. El admin controla cuándo activar/desactivar el envío real
+          via el flag enabled
+
    v0.17.0 · STEP-FLOW-REDESIGN · 2026-05-15 · Flujo unificado sin pausas
    Motivación: usuario reportó que el flujo tenía 3 "pausas" (resultado
    del árbol, score, revisión) que hacían parecer que la denuncia ya
@@ -10048,6 +10503,14 @@ window.addEventListener('DOMContentLoaded', init);
   src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
   onload="__reportLib('jsPDF', true)"
   onerror="__reportLib('jsPDF', false)"></script>
+<!-- EmailJS SDK · STEP-301 · Fase 3.
+     Se carga como UMD que expone window.emailjs. Si el CDN falla, la
+     app sigue funcionando en modo "outbox local" (los correos se
+     encolan pero no se envían realmente). -->
+<script
+  src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"
+  onload="__reportLib('emailjs', true)"
+  onerror="__reportLib('emailjs', false)"></script>
 
 </body>
 </html>
