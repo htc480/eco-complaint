@@ -364,6 +364,219 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .bb-retry:hover { background: currentColor; color: white; }
 .bb-retry:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
+/* ============================================================
+   5c · FLOW STEPPER · indicador de progreso del flujo de denuncia
+   ============================================================ */
+.flow-stepper {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--line);
+  padding: var(--s-4) var(--s-5);
+  position: sticky;
+  top: var(--header-h);
+  z-index: 50;
+}
+.flow-stepper.hidden { display: none; }
+.flow-stepper-inner {
+  display: flex; align-items: center;
+  max-width: var(--w-medium); margin: 0 auto;
+  gap: 4px;
+}
+.flow-step {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; text-decoration: none; color: var(--text-muted);
+  font-size: 12px; font-weight: 600; flex: 0 0 auto;
+  padding: 4px 2px;
+  border-radius: var(--r-sm);
+  transition: color 180ms, background 180ms;
+}
+.flow-step-circle {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-subtle); border: 2px solid var(--line);
+  color: var(--text-muted); font-family: var(--font-display);
+  font-size: 14px; font-weight: 700; position: relative;
+  transition: background 200ms, border-color 200ms, color 200ms, transform 180ms;
+}
+.flow-step-num { position: absolute; }
+.flow-step-check {
+  width: 16px; height: 16px; position: absolute;
+  opacity: 0; transform: scale(0.6); transition: opacity 220ms, transform 220ms;
+}
+.flow-step-label {
+  font-family: var(--font-body); letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.flow-step-bar {
+  flex: 1 1 auto; height: 3px; border-radius: 2px;
+  background: var(--line); transition: background 240ms;
+  min-width: 12px;
+}
+
+/* Estado: pendiente (default) ya está arriba */
+
+/* Estado: actual */
+.flow-step.is-current { color: var(--brand-deep); }
+.flow-step.is-current .flow-step-circle {
+  background: var(--brand-tint); border-color: var(--brand);
+  color: var(--brand-deep);
+  box-shadow: 0 0 0 4px rgba(46,170,112,0.15);
+}
+.flow-step.is-current .flow-step-label { font-weight: 700; }
+
+/* Estado: completado · check visible, número oculto */
+.flow-step.is-done { color: var(--brand-deep); cursor: pointer; }
+.flow-step.is-done .flow-step-circle {
+  background: var(--brand); border-color: var(--brand-deep); color: white;
+}
+.flow-step.is-done .flow-step-num { opacity: 0; }
+.flow-step.is-done .flow-step-check { opacity: 1; transform: scale(1); }
+.flow-step.is-done:hover .flow-step-circle { transform: scale(1.06); }
+
+/* Estado: bloqueado · sin click ni hover */
+.flow-step.is-locked { pointer-events: none; opacity: 0.55; }
+
+/* Barras conectoras · verde si el paso anterior está completado */
+.flow-step-bar.is-done { background: var(--brand); }
+
+/* Responsive mobile */
+@media (max-width: 720px) {
+  .flow-stepper { padding: var(--s-3) var(--s-3); top: 56px; }
+  .flow-step-label { font-size: 10px; }
+  .flow-step-circle { width: 26px; height: 26px; font-size: 12px; }
+  .flow-step-check { width: 13px; height: 13px; }
+}
+
+/* Summary sections (Review + SentView comparten estilo) · STEP-FLOW-REDESIGN */
+.summary-section {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: var(--s-5) var(--s-6);
+  margin-bottom: var(--s-4);
+}
+.summary-section-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: var(--s-3); padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.summary-section-head h3 {
+  margin: 0; font-size: var(--t-19); color: var(--text);
+  font-family: var(--font-display); font-weight: 700;
+}
+.summary-section-head .step-pin {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--brand-tint); color: var(--brand-deep);
+  font-family: var(--font-display); font-weight: 700; font-size: 15px;
+  flex-shrink: 0;
+}
+.summary-section .soft { font-size: 13px; margin-bottom: var(--s-3); }
+
+/* Barras de probabilidad (resumen visual de las 5 respuestas CONESA) */
+.prob-bars {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.prob-bar-row {
+  display: grid; grid-template-columns: 110px 1fr 45px;
+  align-items: center; gap: var(--s-3);
+}
+.prob-bar-label {
+  font-size: 13px; color: var(--text-soft); font-weight: 600;
+}
+.prob-bar-track {
+  height: 8px; background: var(--bg-subtle);
+  border-radius: var(--r-pill); overflow: hidden;
+}
+.prob-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--brand-light), var(--brand));
+  border-radius: var(--r-pill);
+  transition: width 240ms ease;
+}
+.prob-bar-val { font-size: 12px; color: var(--text); text-align: right; }
+@media (max-width: 720px) {
+  .prob-bar-row { grid-template-columns: 95px 1fr 38px; gap: var(--s-2); }
+  .prob-bar-label { font-size: 12px; }
+}
+
+/* Callout del correo maestro dentro del summary */
+.master-email-callout {
+  margin-top: var(--s-4); padding: var(--s-3) var(--s-4);
+  background: var(--brand-tint); border-left: 3px solid var(--brand);
+  border-radius: var(--r-sm); color: var(--brand-deep);
+  font-size: 13px;
+}
+.master-email-callout code {
+  background: white; padding: 2px 6px; border-radius: 4px;
+  font-size: 12px; color: var(--brand-deep);
+}
+
+/* Review heading */
+.review-head { margin-bottom: var(--s-5); }
+.review-fineprint {
+  margin-top: var(--s-5); padding: var(--s-3) var(--s-4);
+  background: var(--bg-subtle); border-radius: var(--r-md);
+  font-size: 13px; color: var(--text-soft); text-align: center;
+}
+
+/* SentView confirmation */
+.sent-confirmation {
+  text-align: center; padding: var(--s-6) var(--s-4) var(--s-5);
+}
+.sent-confirmation h2 { margin: var(--s-3) 0 var(--s-2); }
+.sent-confirmation p { max-width: 480px; margin: 0 auto; }
+
+.sent-summary-wrapper {
+  margin-top: var(--s-8); padding-top: var(--s-6);
+  border-top: 1px dashed var(--line);
+}
+.sent-summary-head {
+  text-align: center; margin-bottom: var(--s-5);
+}
+.sent-summary-head h3 {
+  font-family: var(--font-display); font-size: var(--t-22); margin-bottom: 4px;
+}
+
+.sent-actions-top {
+  display: flex; justify-content: center; gap: var(--s-3);
+  flex-wrap: wrap; margin-bottom: var(--s-5);
+}
+
+/* Mini-resumen del caso identificado (encabezado de la sección
+   probabilidad) · STEP-FLOW-REDESIGN */
+.case-mini-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--brand-tint); border: 1px solid var(--brand-soft);
+  color: var(--brand-deep); border-radius: var(--r-md);
+  padding: var(--s-3) var(--s-4); margin: 0 0 var(--s-5);
+  font-size: 13px; animation: viewIn 280ms ease forwards;
+}
+.case-mini-card.hidden { display: none; }
+.case-mini-card svg { color: var(--brand); flex-shrink: 0; }
+.case-mini-card strong { display: block; margin-bottom: 2px; }
+.case-mini-card span { color: var(--text-soft); font-size: 12px; }
+
+/* Tree meta compacto · usado en location/evidence/review donde el
+   FlowStepper global cubre el progreso, así que solo necesitamos
+   los controles Atrás/Cancelar */
+.tree-meta-compact {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: var(--s-5); padding: 0;
+  background: transparent; border: none;
+}
+.tree-meta-compact .tree-back {
+  color: var(--text-soft); font-size: 14px; text-decoration: none;
+  font-weight: 500; padding: 6px 10px; border-radius: var(--r-sm);
+}
+.tree-meta-compact .tree-back:hover { background: var(--bg-subtle); color: var(--text); }
+.tree-meta-compact .tree-cancel {
+  background: transparent; border: 1px solid var(--line);
+  color: var(--text-muted); font-size: 13px;
+  padding: 5px 12px; border-radius: var(--r-pill);
+  font-family: var(--font-body); font-weight: 500; cursor: pointer;
+}
+.tree-meta-compact .tree-cancel:hover {
+  background: var(--alarm-soft); color: var(--alarm); border-color: var(--alarm-soft);
+}
+
 /* Tarjeta de estado del backend en /admin/config */
 .backend-status-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3);
@@ -2114,6 +2327,38 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   </div>
 </header>
 
+<!-- FLOW STEPPER · indicador de progreso global del flujo de denuncia (STEP-FLOW)
+     Visible solo en rutas /denunciar/*. Click en steps completados navega ahí.
+     Step keys: identificar, evaluar, ubicar, evidencia, revisar. -->
+<nav class="flow-stepper hidden" id="flow-stepper" aria-label="Progreso de la denuncia">
+  <div class="flow-stepper-inner">
+    <a class="flow-step" data-flow-step="identificar" href="#/denunciar">
+      <span class="flow-step-circle"><span class="flow-step-num">1</span><svg class="flow-step-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6.5 11.5 13 4.5"/></svg></span>
+      <span class="flow-step-label">Identificar</span>
+    </a>
+    <div class="flow-step-bar"></div>
+    <a class="flow-step" data-flow-step="evaluar" href="#/denunciar/probabilidad">
+      <span class="flow-step-circle"><span class="flow-step-num">2</span><svg class="flow-step-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6.5 11.5 13 4.5"/></svg></span>
+      <span class="flow-step-label">Evaluar</span>
+    </a>
+    <div class="flow-step-bar"></div>
+    <a class="flow-step" data-flow-step="ubicar" href="#/denunciar/ubicacion">
+      <span class="flow-step-circle"><span class="flow-step-num">3</span><svg class="flow-step-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6.5 11.5 13 4.5"/></svg></span>
+      <span class="flow-step-label">Ubicar</span>
+    </a>
+    <div class="flow-step-bar"></div>
+    <a class="flow-step" data-flow-step="evidencia" href="#/denunciar/evidencias">
+      <span class="flow-step-circle"><span class="flow-step-num">4</span><svg class="flow-step-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6.5 11.5 13 4.5"/></svg></span>
+      <span class="flow-step-label">Evidencia</span>
+    </a>
+    <div class="flow-step-bar"></div>
+    <a class="flow-step" data-flow-step="revisar" href="#/denunciar/revision">
+      <span class="flow-step-circle"><span class="flow-step-num">5</span><svg class="flow-step-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6.5 11.5 13 4.5"/></svg></span>
+      <span class="flow-step-label">Revisar</span>
+    </a>
+  </div>
+</nav>
+
 <!-- MAIN -->
 <main class="app-main" id="app-main">
 
@@ -2340,6 +2585,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   <!-- PROBABILIDAD · 5 preguntas ponderadas (STEP-003) -->
   <section class="view" id="view-probability" data-route="/denunciar/probabilidad">
     <div class="container-narrow">
+      <!-- Mini resumen del caso identificado (visible solo en la 1ª pregunta) -->
+      <div class="case-mini-card hidden" id="prob-case-mini" role="status">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        <div>
+          <strong>Caso identificado.</strong>
+          <span id="prob-case-mini-text"></span>
+        </div>
+      </div>
       <div class="tree-shell">
         <div class="tree-meta">
           <button class="tree-back" id="prob-back-btn" aria-label="Volver a pregunta anterior">← Atrás</button>
@@ -2367,17 +2620,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     </div>
   </section>
 
-  <!-- UBICACIÓN · GPS / Mapa Leaflet / texto (STEP-004) -->
+  <!-- UBICACIÓN · GPS / Mapa Leaflet / texto (STEP-004 · refactored STEP-FLOW) -->
   <section class="view" id="view-location" data-route="/denunciar/ubicacion">
     <div class="container-narrow">
       <div class="tree-shell">
-        <div class="tree-meta">
-          <a class="tree-back" href="#/denunciar/score" aria-label="Volver al score">← Atrás</a>
-          <div class="tree-context">Paso 4 de 6 · Ubicación</div>
-          <button class="tree-cancel" id="loc-cancel-btn" aria-label="Cancelar denuncia">Cancelar</button>
+        <div class="tree-meta tree-meta-compact">
+          <a class="tree-back" href="#/denunciar/probabilidad" aria-label="Volver a probabilidad">← Atrás</a>
+          <button class="tree-cancel" id="loc-cancel-btn" aria-label="Cancelar denuncia">Cancelar denuncia</button>
         </div>
-        <div class="tree-progress" role="progressbar" aria-valuenow="65"><div class="tree-progress-fill" style="width: 65%"></div></div>
-        <div class="tree-progress-label">Paso <strong>4</strong> · Ubicación del hecho</div>
 
         <div class="tree-question-card">
           <h2 class="tree-question">¿Dónde ocurrió el hecho?</h2>
@@ -2415,17 +2665,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     </div>
   </section>
 
-  <!-- EVIDENCIAS · upload de fotos/videos (STEP-004) -->
+  <!-- EVIDENCIAS · upload de fotos/videos (STEP-004 · refactored STEP-FLOW) -->
   <section class="view" id="view-evidence" data-route="/denunciar/evidencias">
     <div class="container-narrow">
       <div class="tree-shell">
-        <div class="tree-meta">
+        <div class="tree-meta tree-meta-compact">
           <a class="tree-back" href="#/denunciar/ubicacion" aria-label="Volver a ubicación">← Atrás</a>
-          <div class="tree-context">Paso 5 de 6 · Evidencias</div>
-          <button class="tree-cancel" id="ev-cancel-btn" aria-label="Cancelar denuncia">Cancelar</button>
+          <button class="tree-cancel" id="ev-cancel-btn" aria-label="Cancelar denuncia">Cancelar denuncia</button>
         </div>
-        <div class="tree-progress" role="progressbar" aria-valuenow="83"><div class="tree-progress-fill" style="width: 83%"></div></div>
-        <div class="tree-progress-label">Paso <strong>5</strong> · Evidencias y descripción</div>
 
         <div class="tree-question-card">
           <h2 class="tree-question">Adjunta fotos o videos del hecho</h2>
@@ -2458,18 +2705,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     </div>
   </section>
 
-  <!-- REVISIÓN final antes de enviar (STEP-004) -->
+  <!-- REVISIÓN final antes de enviar (STEP-004 · refactored STEP-FLOW) -->
   <section class="view" id="view-review" data-route="/denunciar/revision">
     <div class="container-narrow">
       <div class="tree-shell">
-        <div class="tree-meta">
+        <div class="tree-meta tree-meta-compact">
           <a class="tree-back" href="#/denunciar/evidencias" aria-label="Volver a evidencias">← Atrás</a>
-          <div class="tree-context">Paso 6 de 6 · Revisión</div>
-          <button class="tree-cancel" id="rev-cancel-btn" aria-label="Cancelar denuncia">Cancelar</button>
+          <button class="tree-cancel" id="rev-cancel-btn" aria-label="Cancelar denuncia">Cancelar denuncia</button>
         </div>
-        <div class="tree-progress" role="progressbar" aria-valuenow="100"><div class="tree-progress-fill" style="width: 100%"></div></div>
-        <div class="tree-progress-label">Paso <strong>6</strong> · Revisa antes de enviar</div>
-
         <div id="review-container"></div>
       </div>
     </div>
@@ -4254,6 +4497,23 @@ const Router = {
   navigate(path) { window.location.hash = '#' + path; },
   resolve() {
     const hash = (window.location.hash || '#/').slice(1);
+    /* STEP-FLOW-REDESIGN · Redirect de rutas obsoletas.
+       /denunciar/resultado y /denunciar/score eran "pausas intermedias"
+       eliminadas. Si alguien las visita por link viejo, redirigimos al
+       paso correspondiente del nuevo flujo sin romper. */
+    if (hash === '/denunciar/resultado') {
+      const d = Persist.get('draft');
+      const target = (d && d.delitos && d.delitos.length > 0)
+        ? '/denunciar/probabilidad' : '/denunciar';
+      return this.navigate(target);
+    }
+    if (hash === '/denunciar/score') {
+      const d = Persist.get('draft');
+      const target = (d && d.probabilityAnswers && d.probabilityAnswers.every(function(a){return a!==null}))
+        ? '/denunciar/ubicacion'
+        : (d && d.delitos && d.delitos.length > 0 ? '/denunciar/probabilidad' : '/denunciar');
+      return this.navigate(target);
+    }
     const route = this.routes.find(r => r.path === hash) || { path: hash, view: 'view-404' };
 
     if (route.requires === 'session' && !Auth.current()) { Toast.show('Inicia sesión para continuar', 'error'); return this.navigate('/iniciar-sesion'); }
@@ -4289,6 +4549,7 @@ const Router = {
     Store.set({ route: hash });
     Audit.log('navigate', 'route', hash);
     UI.updateNav();
+    FlowStepper.update(hash);
     Skeleton.hide();
     window.scrollTo({ top: 0 });
   }
@@ -4352,10 +4613,22 @@ const Tree = {
     }
     Audit.log('tree_select', 'report', null, { node: node.id, option: idx, label: opt.label });
     if (opt.next === 'result') {
+      /* STEP-FLOW-REDESIGN · Pausa 1 eliminada.
+         Antes: navigate('/denunciar/resultado') con vista de pausa.
+         Ahora: calculamos severidad ancla, persistimos en draft y
+         vamos directo al paso 2 (probabilidad). La identificación
+         del caso se muestra ahora como contexto al inicio de las
+         preguntas CONESA, y la información completa de delitos
+         vive en la revisión final y en el comprobante de envío. */
       this.state.nodeId = 'result';
+      const delitosCat = Persist.get('delitos');
+      const sevs = this.state.delitos.map(function(a) { return delitosCat[a].sev; });
+      this.state.severity = sevs.length > 0 ? Math.max.apply(null, sevs) : null;
       Persist.set('draft', this.state);
-      Audit.log('tree_complete', 'report', null, { delitos: this.state.delitos });
-      Router.navigate('/denunciar/resultado');
+      Audit.log('tree_complete', 'report', null, {
+        delitos: this.state.delitos, severity: this.state.severity
+      });
+      Router.navigate('/denunciar/probabilidad');
     } else {
       this.state.nodeId = opt.next;
       Persist.set('draft', this.state);
@@ -4697,10 +4970,28 @@ const Probability = {
       Persist.set('draft', draft);
       this.renderCurrent();
     } else {
+      /* STEP-FLOW-REDESIGN · Pausa 2 eliminada.
+         Antes: navigate('/denunciar/score') con vista de pausa.
+         Ahora: calculamos probabilidad ponderada + score + banda,
+         persistimos en draft y vamos directo al paso 3 (ubicación).
+         La matriz visual + banda + autoridades viven ahora en la
+         revisión final donde el usuario puede contemplar toda la
+         información antes de enviar. */
       draft.probabilityNode = qIdx;
+      const probability = this.compute();
+      const severity = draft.severity != null ? draft.severity : Risk.severityFromDelitos(draft.delitos);
+      const score = Risk.score(severity, probability);
+      const band = Risk.band(score);
+      draft.probability = probability;
+      draft.severity = severity;
+      draft.score = score;
+      draft.band = band;
       Persist.set('draft', draft);
-      Audit.log('prob_complete', 'report', null, { answers: draft.probabilityAnswers });
-      Router.navigate('/denunciar/score');
+      Audit.log('prob_complete', 'report', null, {
+        answers: draft.probabilityAnswers, probability: probability,
+        severity: severity, score: score, band: band
+      });
+      Router.navigate('/denunciar/ubicacion');
     }
   },
 
@@ -4708,8 +4999,10 @@ const Probability = {
     const draft = Persist.get('draft');
     if (!draft) return;
     if (draft.probabilityNode === 0) {
-      /* Volver al resultado del árbol */
-      Router.navigate('/denunciar/resultado');
+      /* STEP-FLOW-REDESIGN · Vuelve al árbol directamente
+         (la antigua pausa /denunciar/resultado fue eliminada).
+         El árbol restaura el state desde history. */
+      Router.navigate('/denunciar');
       return;
     }
     draft.probabilityNode -= 1;
@@ -4735,6 +5028,26 @@ const Probability = {
     if (!draft.probabilityAnswers) { this.start(); return; }
     const idx = draft.probabilityNode;
     const q = this.questions[idx];
+
+    /* STEP-FLOW-REDESIGN · Mini-resumen del caso solo en la primera
+       pregunta. Da contexto al usuario después del árbol sin que el
+       resultado parezca el final del flujo. */
+    const miniCard = document.getElementById('prob-case-mini');
+    const miniText = document.getElementById('prob-case-mini-text');
+    if (miniCard && miniText) {
+      if (idx === 0 && draft.delitos && draft.delitos.length > 0) {
+        const delitosCat = Persist.get('delitos');
+        const artNames = draft.delitos.slice(0, 3).map(function(a) {
+          return 'Art. ' + a + (delitosCat[a] ? ' (' + delitosCat[a].cat + ')' : '');
+        });
+        const extra = draft.delitos.length > 3 ? ' y ' + (draft.delitos.length - 3) + ' más' : '';
+        miniText.textContent = ' Vamos a evaluar el contexto del hecho. Aplica: ' +
+          artNames.join(', ') + extra + '.';
+        miniCard.classList.remove('hidden');
+      } else {
+        miniCard.classList.add('hidden');
+      }
+    }
 
     /* Progreso (continúa desde el árbol pero ahora 5 preguntas más) */
     const pct = Math.round(((idx + 1) / this.questions.length) * 100);
@@ -5726,29 +6039,60 @@ const Report = {
 
 /* === I.14 · REVIEW · vista de revisión final (STEP-004) === */
 const Review = {
-  render() {
-    const root = document.getElementById('review-container');
-    const draft = Persist.get('draft');
-    if (!draft || !draft.delitos || draft.delitos.length === 0) {
-      Toast.show('No hay denuncia en progreso', 'error');
-      Router.navigate('/denunciar'); return;
-    }
-    const delitos = Persist.get('delitos');
-    const cumulative = Authorities.cumulative(draft.band);
-    const allEmails = new Set();
-    cumulative.forEach(a => (a.emails || []).forEach(e => allEmails.add(e)));
-    const masterEmail = (Persist.get('config.authorities') || {}).master_email;
+  /* STEP-FLOW-REDESIGN · Helper compartido para el resumen visual completo.
+     Lo usan Review (con un draft, antes de enviar) y SentView (con un
+     report ya persistido, después de enviar). El mismo HTML asegura
+     que el usuario vea exactamente lo mismo antes y después del envío,
+     reduciendo la sensación de "¿se envió bien?".
 
-    const locStr = draft.location
-      ? (draft.location.text
-          ? draft.location.text
-          : `Coordenadas: ${draft.location.lat.toFixed(5)}, ${draft.location.lng.toFixed(5)} (${draft.location.source})`)
+     opts:
+       - mode: 'draft' | 'sent'
+       - mapId: id del contenedor del mini-mapa (review-mini-map o sent-mini-map)
+       - description: texto a mostrar como descripción del denunciante
+       - radicado: solo en mode='sent' · se omite si null
+  */
+  buildSummaryHtml(data, opts) {
+    opts = opts || {};
+    const isSent = opts.mode === 'sent';
+    const delitos = Persist.get('delitos');
+    const cumulative = Authorities.cumulative(data.band);
+    const allEmails = new Set();
+    cumulative.forEach(function(a) { (a.emails || []).forEach(function(e) { allEmails.add(e); }); });
+    const masterEmail = data.master_email || (Persist.get('config.authorities') || {}).master_email;
+    const otherEmails = Array.from(allEmails).filter(function(e) { return e !== masterEmail; });
+
+    /* Severidad ancla = delito con mayor severidad (para destacar) */
+    const arts = data.delitos || [];
+    const sevsByArt = arts.map(function(a) { return { art: a, sev: delitos[a] ? delitos[a].sev : 0 }; });
+    const maxSev = Math.max.apply(null, sevsByArt.map(function(x) { return x.sev; })) || data.severity;
+    const anchorArt = (sevsByArt.find(function(x) { return x.sev === maxSev; }) || {}).art;
+
+    /* Probabilidad por dimensión */
+    const probLabels = ['Extensión', 'Reversibilidad', 'Recurrencia', 'Vulnerabilidad', 'Persistencia'];
+    const probAnswers = isSent ? (data.probability_answers || []) : (data.probabilityAnswers || []);
+    const probBars = probAnswers.map(function(v, i) {
+      const w = ((v || 0) / 5) * 100;
+      return '<div class="prob-bar-row">' +
+        '<span class="prob-bar-label">' + probLabels[i] + '</span>' +
+        '<div class="prob-bar-track"><div class="prob-bar-fill" style="width: ' + w + '%"></div></div>' +
+        '<span class="prob-bar-val mono">' + (v || 0) + '/5</span>' +
+        '</div>';
+    }).join('');
+
+    /* Matriz visual 5×5 (reutiliza el helper de Score) */
+    const matrixHtml = Score.buildMatrix(data.severity, data.probability);
+
+    /* Ubicación */
+    const locStr = data.location
+      ? (data.location.text
+          ? data.location.text
+          : 'Coordenadas: ' + data.location.lat.toFixed(5) + ', ' + data.location.lng.toFixed(5) + ' (' + (data.location.source || 'sin fuente') + ')')
       : '<span class="muted">Sin ubicación</span>';
 
-    /* STEP-203 · thumbs con src directa si hay dataUrl/preview, o
-       atributo data-ev-path para lazy load de signed URL después. */
-    const evidenceHtml = (draft.evidence && draft.evidence.length > 0)
-      ? `<div class="review-evidence-grid">${draft.evidence.map(function(ev) {
+    /* Evidencias · thumbs con src directa o lazy via path */
+    const evList = data.evidence || [];
+    const evidenceHtml = evList.length > 0
+      ? '<div class="review-evidence-grid">' + evList.map(function(ev) {
           const src = EvidenceView.thumbSrcSync(ev);
           const pathAttr = ev.path ? ' data-ev-path="' + ev.path + '"' : '';
           const srcAttr = src ? ' src="' + src + '"' : '';
@@ -5757,62 +6101,121 @@ const Review = {
               ? '<img' + srcAttr + pathAttr + ' alt="' + (ev.name || '') + '">'
               : '<video' + srcAttr + pathAttr + ' muted></video>') +
             '</div>';
-        }).join('')}</div><div class="muted" style="margin-top:8px;font-size:13px">${draft.evidence.length} archivo(s) adjunto(s)</div>`
-      : `<div class="muted">${I18n.t('rev.evidence.none')}</div>`;
+        }).join('') + '</div>' +
+        '<div class="muted" style="margin-top:8px;font-size:13px">' + evList.length + ' archivo(s) adjunto(s)</div>'
+      : '<div class="muted">' + I18n.t('rev.evidence.none') + '</div>';
+
+    const description = (data.reporter_description !== undefined ? data.reporter_description : opts.description) || '';
+
+    /* Banda hero · más visible. Reutilizamos los estilos de Score. */
+    const bandHero = '<div class="band-hero" data-band="' + data.band + '">' +
+      '<div class="band-eyebrow">Banda de riesgo · Severidad ' + data.severity +
+      ' × Probabilidad ' + data.probability + ' = ' + data.score + '/25</div>' +
+      '<div class="band-name" data-band="' + data.band + '">' + Risk.bandLabel(data.band) + '</div>' +
+      '<p class="band-tagline">' + Risk.bandTagline(data.band) + '</p>' +
+      '</div>';
+
+    /* Tarjetas de delitos */
+    const delitosCards = arts.map(function(a) {
+      const d = delitos[a] || {};
+      const isAnchor = a === anchorArt && arts.length > 1;
+      return '<div class="delito-card" data-sev="' + d.sev + '" ' + (isAnchor ? 'data-anchor="true"' : '') + '>' +
+        (isAnchor ? '<span class="delito-anchor-tag">Delito ancla</span>' : '') +
+        '<span class="delito-art">Art. ' + a + '</span>' +
+        '<h4>' + (d.name || '—') + '</h4>' +
+        '<div class="delito-meta">' +
+          '<span><strong>Prisión:</strong> ' + (d.prision || '—') + '</span>' +
+          '<span><strong>Multa:</strong> ' + (d.multa || '—') + '</span>' +
+          '<span><strong>Categoría:</strong> ' + (d.cat || '—') + '</span>' +
+        '</div>' +
+        '<div class="delito-sev" data-sev="' + d.sev + '">Severidad ' + d.sev + ' · ' + I18n.t('sev.' + d.sev) + '</div>' +
+      '</div>';
+    }).join('');
+
+    /* Autoridades acumulativas · una tarjeta por banda escalonada */
+    const authCards = cumulative.map(function(a) { return Score.authorityCard(a); }).join('');
+
+    return [
+      bandHero,
+
+      '<div class="summary-section">',
+        '<div class="summary-section-head"><span class="step-pin">①</span><h3>Hecho identificado</h3></div>',
+        '<p class="soft">Estos son los artículos del Código Penal (Ley 2111 de 2021) que aplican a tu denuncia.</p>',
+        '<div class="delitos-list">' + delitosCards + '</div>',
+      '</div>',
+
+      '<div class="summary-section">',
+        '<div class="summary-section-head"><span class="step-pin">②</span><h3>Cómo evaluamos el riesgo</h3></div>',
+        '<p class="soft">Combinamos la gravedad del delito con tus respuestas sobre el contexto.</p>',
+        '<div class="prob-bars">' + probBars + '</div>',
+        '<div class="matrix-section">',
+          '<h4 style="margin: 16px 0 8px">Tu caso en la matriz de riesgo</h4>',
+          matrixHtml,
+        '</div>',
+      '</div>',
+
+      '<div class="summary-section">',
+        '<div class="summary-section-head"><span class="step-pin">③</span><h3>Dónde ocurrió</h3></div>',
+        '<div class="body">' + locStr + '</div>',
+        (data.location && data.location.lat)
+          ? '<div class="review-mini-map" id="' + (opts.mapId || 'summary-mini-map') + '"></div>'
+          : '',
+      '</div>',
+
+      '<div class="summary-section">',
+        '<div class="summary-section-head"><span class="step-pin">④</span><h3>Evidencia adjunta</h3></div>',
+        evidenceHtml,
+      '</div>',
+
+      description ? (
+        '<div class="summary-section">' +
+          '<div class="summary-section-head"><span class="step-pin">✎</span><h3>Tu descripción del hecho</h3></div>' +
+          '<div class="body" style="white-space: pre-wrap; background: var(--bg-subtle); padding: 12px 16px; border-radius: var(--r-md)">' +
+          description + '</div>' +
+        '</div>'
+      ) : '',
+
+      '<div class="summary-section">',
+        '<div class="summary-section-head"><span class="step-pin">⑤</span><h3>Quién recibirá esta denuncia</h3></div>',
+        '<p class="soft">Las autoridades se notifican de forma <strong>acumulativa</strong> según la banda de riesgo: cada banda más alta suma autoridades adicionales a las de las bandas inferiores.</p>',
+        '<div class="authorities-grid">' + authCards + '</div>',
+        '<div class="master-email-callout">',
+          '<strong>📬 Correo maestro:</strong> <code>' + (masterEmail || 'no configurado') + '</code>',
+          '<p class="soft" style="font-size: 12px; margin: 4px 0 0">Eco-Complaint guarda copia de toda denuncia para trazabilidad y archivo central.</p>',
+        '</div>',
+      '</div>'
+    ].join('');
+  },
+
+  render() {
+    const root = document.getElementById('review-container');
+    const draft = Persist.get('draft');
+    if (!draft || !draft.delitos || draft.delitos.length === 0) {
+      Toast.show('No hay denuncia en progreso', 'error');
+      Router.navigate('/denunciar'); return;
+    }
+
+    const summaryHtml = this.buildSummaryHtml(draft, { mode: 'draft', mapId: 'review-mini-map' });
 
     root.innerHTML = `
       <div class="review-card">
-        <h2 style="margin-bottom: var(--s-2)">${I18n.t('rev.title')}</h2>
-        <p class="soft" style="margin-bottom: var(--s-6)">Confirma que la información es correcta. Una vez enviada, la denuncia llega a las autoridades inmediatamente.</p>
-
-        <div class="review-section">
-          <h4>${I18n.t('rev.delitos')}</h4>
-          <div class="review-delitos-list">
-            ${draft.delitos.map(a => {
-              const d = delitos[a];
-              return `<div class="review-delito-item"><span class="art">${a}</span><span>${d.name}</span></div>`;
-            }).join('')}
-          </div>
+        <div class="review-head">
+          <span class="pill">Último paso</span>
+          <h2 style="margin: var(--s-2) 0">Revisa tu denuncia</h2>
+          <p class="soft">Esto es exactamente lo que recibirán las autoridades. Si todo está correcto, envíala. Si quieres cambiar algo, vuelve al paso correspondiente con la barra superior o los enlaces.</p>
         </div>
 
-        <div class="review-section">
-          <h4>${I18n.t('rev.risk')}</h4>
-          <div class="review-band-row">
-            <span class="review-band-pill" data-band="${draft.band}">${Risk.bandLabel(draft.band)}</span>
-            <span class="review-score-mono">Sev ${draft.severity} × Prob ${draft.probability} = <strong style="color: var(--text)">${draft.score} / 25</strong></span>
-          </div>
-        </div>
-
-        <div class="review-section">
-          <h4>${I18n.t('rev.location')}</h4>
-          <div class="body">${locStr}</div>
-          ${(draft.location && draft.location.lat) ? `<div class="review-mini-map" id="review-mini-map"></div>` : ''}
-        </div>
-
-        <div class="review-section">
-          <h4>${I18n.t('rev.evidence')}</h4>
-          ${evidenceHtml}
-        </div>
-
-        ${draft.reporter_description ? `
-          <div class="review-section">
-            <h4>${I18n.t('rev.description')}</h4>
-            <div class="body" style="white-space: pre-wrap">${draft.reporter_description}</div>
-          </div>` : ''}
-
-        <div class="review-section">
-          <h4>${I18n.t('rev.authorities')}</h4>
-          <div class="review-authorities-list">
-            ${Array.from(allEmails).map(e => `<code>${e}</code>`).join('')}
-            ${masterEmail ? `<code class="master">${masterEmail} · maestro</code>` : ''}
-          </div>
-          <p class="soft" style="font-size: 12px; margin-top: 8px">${I18n.t('rev.master.note')}</p>
-        </div>
+        ${summaryHtml}
 
         <div class="review-actions">
-          <button class="btn btn-primary btn-lg" id="review-send-btn">📤 ${I18n.t('rev.send')}</button>
-          <a class="btn btn-ghost" href="#/denunciar/evidencias">Volver a editar evidencias</a>
+          <button class="btn btn-primary btn-lg" id="review-send-btn">📤 Enviar denuncia</button>
+          <a class="btn btn-ghost" href="#/denunciar/evidencias">Volver a evidencia</a>
         </div>
+
+        <p class="review-fineprint">
+          Una vez enviada, recibes un <strong>número de radicado</strong> para consultar el estado.
+          Las autoridades comienzan el proceso de inmediato según su competencia.
+        </p>
       </div>
     `;
 
@@ -5820,12 +6223,12 @@ const Review = {
     if (draft.location && draft.location.lat) {
       MapWidget.initStatic('review-mini-map', draft.location.lat, draft.location.lng);
     }
-    /* STEP-203 · lazy load de signed URLs en thumbs sin src */
+    /* Lazy load de signed URLs en thumbs sin src directo */
     root.querySelectorAll('[data-ev-path]').forEach(function(el) {
       if (!el.getAttribute('src')) EvidenceView.loadSignedThumb(el.dataset.evPath, el);
     });
 
-    /* Bind */
+    /* Bind enviar */
     document.getElementById('review-send-btn').onclick = async () => {
       const ok = await Modal.confirm({
         title: I18n.t('rev.send.confirm.title'),
@@ -5841,14 +6244,20 @@ const Review = {
         Router.navigate('/denunciar/enviado');
       } catch (err) {
         Toast.show('Error al enviar: ' + (err.message || err), 'error');
-        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = I18n.t('rev.send'); }
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '📤 Enviar denuncia'; }
       }
     };
-    document.getElementById('rev-cancel-btn').onclick = () => Tree.cancel();
+    /* Bind cancelar · usa Tree.cancel que ya pide confirmación */
+    const cancelBtn = document.getElementById('rev-cancel-btn');
+    if (cancelBtn) cancelBtn.onclick = function() { Tree.cancel(); };
   }
 };
 
-/* === I.15 · SENT VIEW · confirmación con radicado (STEP-004) === */
+/* === I.15 · SENT VIEW · confirmación con radicado (STEP-FLOW-REDESIGN) ===
+   Ahora muestra el MISMO resumen completo de Review más el radicado
+   destacado, QR, descarga PDF y siguiente acción. Esto cierra el bucle:
+   el usuario ve antes de enviar lo mismo que ve después, con el radicado
+   añadido. Ya no hay sensación de "¿se envió bien? ¿qué se envió?". */
 const SentView = {
   render() {
     const root = document.getElementById('sent-container');
@@ -5863,19 +6272,29 @@ const SentView = {
       root.innerHTML = `<div class="card"><div class="empty-state"><h4>No encontramos esa denuncia</h4></div></div>`;
       return;
     }
-    const masterEmail = report.master_email;
-    const otherEmails = report.authorities_notified.filter(e => e !== masterEmail);
+
+    /* Reutiliza el helper compartido para mostrar el mismo resumen
+       que vio en /denunciar/revision · con mapId distinto para no
+       colisionar si ambas vistas se han renderizado en la sesión. */
+    const summaryHtml = Review.buildSummaryHtml(report, {
+      mode: 'sent',
+      mapId: 'sent-mini-map'
+    });
 
     root.innerHTML = `
       <div class="sent-card">
-        <div class="sent-icon-circle">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <!-- Confirmación visual destacada arriba -->
+        <div class="sent-confirmation">
+          <div class="sent-icon-circle">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h2>¡Denuncia enviada!</h2>
+          <p class="soft">Las autoridades ya recibieron tu reporte. Guarda el número de radicado para hacer seguimiento.</p>
         </div>
-        <h2>${I18n.t('sent.title')}</h2>
-        <p>${I18n.t('sent.subtitle')}</p>
 
+        <!-- Radicado destacado y copiable -->
         <div class="radicado-box" id="radicado-box-clickable" role="button" tabindex="0" aria-label="Copiar número de radicado">
-          <div class="radicado-label">${I18n.t('sent.radicado.label')}</div>
+          <div class="radicado-label">Número de radicado</div>
           <div class="radicado-num">${report.radicado}</div>
           <div class="radicado-copy-hint">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -5883,33 +6302,43 @@ const SentView = {
           </div>
         </div>
 
-        <div class="sent-meta">
-          <div class="sent-meta-row"><span>${I18n.t('sent.meta.date')}</span><strong>${new Date(report.created_at).toLocaleString('es-CO')}</strong></div>
-          <div class="sent-meta-row"><span>${I18n.t('sent.meta.band')}</span><strong>${Risk.bandLabel(report.band)} (score ${report.score}/25)</strong></div>
-          <div class="sent-meta-row"><span>${I18n.t('sent.meta.delitos')}</span><strong>${report.delitos.join(', ')}</strong></div>
-          <div class="sent-meta-row"><span>${I18n.t('sent.meta.evidence')}</span><strong>${report.evidence.length} archivo(s)</strong></div>
-          <div class="sent-meta-row"><span>${I18n.t('sent.meta.mode')}</span><strong>${report.is_anonymous ? I18n.t('sent.mode.guest') : I18n.t('sent.mode.auth')}</strong></div>
+        <!-- Acciones primarias arriba (no hay que scrollear) -->
+        <div class="sent-actions sent-actions-top">
+          <button class="btn btn-primary btn-lg" id="sent-pdf-btn">📄 Descargar comprobante (PDF)</button>
+          <a class="btn btn-soft" href="#/consulta?radicado=${encodeURIComponent(report.radicado)}">🔎 Consultar estado en línea</a>
         </div>
 
-        <div class="sent-emails-sent">
-          <h4>${I18n.t('sent.emails.title')} (${report.authorities_notified.length})</h4>
-          ${masterEmail ? `<div class="sent-email-row master"><span class="check">✓</span><code>${masterEmail}</code><span class="muted" style="font-size:11px">MAESTRO</span></div>` : ''}
-          ${otherEmails.map(e => `<div class="sent-email-row"><span class="check">✓</span><code>${e}</code></div>`).join('')}
+        <!-- Resumen completo idéntico a Review · "lo que enviamos" -->
+        <div class="sent-summary-wrapper">
+          <div class="sent-summary-head">
+            <h3>Esto es lo que recibieron las autoridades</h3>
+            <p class="soft">Mismo contenido que viste en la revisión, ahora con tu número de radicado asignado.</p>
+          </div>
+          ${summaryHtml}
         </div>
 
+        <!-- Acciones secundarias al final -->
         <div class="sent-actions">
-          <button class="btn btn-soft btn-lg" id="sent-pdf-btn">📄 Descargar PDF del radicado</button>
-          <a class="btn btn-primary btn-lg" href="#/">${I18n.t('sent.action.home')}</a>
-          <a class="btn btn-ghost" href="#/denunciar">${I18n.t('sent.action.new')}</a>
+          <a class="btn btn-ghost" href="#/">${I18n.t('sent.action.home')}</a>
+          <a class="btn btn-soft" href="#/denunciar">${I18n.t('sent.action.new')}</a>
           ${Auth.current() ? `<a class="btn btn-soft" href="#/mis-denuncias">${I18n.t('sent.action.mine')}</a>` : ''}
         </div>
 
-        <div class="info-card-soft" style="margin-top: var(--s-6); max-width: 480px; margin-left: auto; margin-right: auto">
-          <h4>💡 Guarda tu número de radicado</h4>
-          <p>Con el número <code>${report.radicado}</code> podrás <a href="#/consulta?radicado=${encodeURIComponent(report.radicado)}" style="color: var(--brand-deep); font-weight: 600">consultar el estado de tu denuncia en cualquier momento</a> desde la página pública, sin necesidad de iniciar sesión.</p>
+        <div class="info-card-soft" style="margin-top: var(--s-6); max-width: 560px; margin-left: auto; margin-right: auto">
+          <h4>💡 ¿Por qué guardar el radicado?</h4>
+          <p>Con el número <code>${report.radicado}</code> puedes <a href="#/consulta?radicado=${encodeURIComponent(report.radicado)}" style="color: var(--brand-deep); font-weight: 600">ver el estado de la denuncia</a> en cualquier momento desde la página pública, sin iniciar sesión. Las autoridades actualizarán el estado conforme avanza el caso.</p>
         </div>
       </div>
     `;
+
+    /* Mini-mapa */
+    if (report.location && report.location.lat) {
+      MapWidget.initStatic('sent-mini-map', report.location.lat, report.location.lng);
+    }
+    /* Lazy load de evidencias */
+    root.querySelectorAll('[data-ev-path]').forEach(function(el) {
+      if (!el.getAttribute('src')) EvidenceView.loadSignedThumb(el.dataset.evPath, el);
+    });
 
     /* Bind PDF download */
     document.getElementById('sent-pdf-btn').onclick = () => PdfGen.downloadReport(report);
@@ -8672,6 +9101,87 @@ const UI = {
   }
 };
 
+/* === K-bis · FLOW STEPPER · STEP-FLOW-REDESIGN ====================
+   Controla el indicador de progreso global del flujo de denuncia.
+   Calcula qué pasos están completados según el contenido del draft
+   y resalta el paso actual según la ruta activa. */
+const FlowStepper = {
+  /* Definición de los 5 pasos: key, ruta destino, predicado que indica
+     si el paso está completado leyendo el draft. */
+  STEPS: [
+    { key: 'identificar', route: '/denunciar',
+      done: function(d) { return !!(d && d.delitos && d.delitos.length > 0); } },
+    { key: 'evaluar',     route: '/denunciar/probabilidad',
+      done: function(d) { return !!(d && d.probabilityAnswers && d.probabilityAnswers.length === 5); } },
+    { key: 'ubicar',      route: '/denunciar/ubicacion',
+      done: function(d) { return !!(d && d.location); } },
+    { key: 'evidencia',   route: '/denunciar/evidencias',
+      done: function(d) { return !!(d && (d.evidence_visited || (d.evidence && d.evidence.length > 0))); } },
+    { key: 'revisar',     route: '/denunciar/revision',
+      done: function() { return false; } /* nunca "done" hasta enviar */ }
+  ],
+
+  /* Mapea una ruta del flujo a su step key. */
+  stepForRoute(route) {
+    if (route === '/denunciar' || route === '/denunciar/resultado') return 'identificar';
+    if (route === '/denunciar/probabilidad' || route === '/denunciar/score') return 'evaluar';
+    if (route === '/denunciar/ubicacion')  return 'ubicar';
+    if (route === '/denunciar/evidencias') return 'evidencia';
+    if (route === '/denunciar/revision')   return 'revisar';
+    return null;
+  },
+
+  /* True si la ruta está dentro del flujo (para decidir mostrar/ocultar). */
+  isFlowRoute(route) {
+    return !!this.stepForRoute(route);
+  },
+
+  /* Actualiza visibilidad y estados según ruta + draft actuales. */
+  update(route) {
+    const el = document.getElementById('flow-stepper');
+    if (!el) return;
+    const currentKey = this.stepForRoute(route);
+    if (!currentKey) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+
+    const draft = Persist.get('draft');
+    const currentIdx = this.STEPS.findIndex(function(s) { return s.key === currentKey; });
+
+    const stepEls = el.querySelectorAll('.flow-step');
+    const barEls  = el.querySelectorAll('.flow-step-bar');
+
+    this.STEPS.forEach(function(s, i) {
+      const node = stepEls[i];
+      if (!node) return;
+      node.classList.remove('is-current', 'is-done', 'is-locked');
+      const isDone = s.done(draft);
+      const isCurrent = i === currentIdx;
+      /* Reglas:
+         - El paso actual SIEMPRE es is-current.
+         - Los pasos antes del actual son is-done si su predicado lo dice.
+         - Los pasos después del actual son is-locked salvo que ya hayan
+           sido completados antes (caso: usuario navega hacia atrás). */
+      if (isCurrent) {
+        node.classList.add('is-current');
+      } else if (i < currentIdx) {
+        if (isDone) node.classList.add('is-done');
+        /* si i<current pero no done, queda en estado pendiente (raro pero
+           tolerable: el usuario está reeditando un paso anterior) */
+      } else { /* i > currentIdx */
+        if (isDone) node.classList.add('is-done');
+        else node.classList.add('is-locked');
+      }
+    });
+
+    /* Barras conectoras · verde si el step ANTERIOR está done o es el actual */
+    barEls.forEach(function(bar, i) {
+      const prev = stepEls[i];
+      const isDoneOrCurrent = prev && (prev.classList.contains('is-done') || prev.classList.contains('is-current'));
+      bar.classList.toggle('is-done', !!isDoneOrCurrent);
+    });
+  }
+};
+
 /* === L · TOAST === */
 const Toast = {
   show(msg, type = 'ok', timeout = 3200) {
@@ -8942,8 +9452,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.16.0', step: 'STEP-201..208' });
-    console.log('%cEco-Complaint · v0.16.0 · Fase 2 (Storage + signed URLs) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.17.0', step: 'STEP-FLOW-REDESIGN' });
+    console.log('%cEco-Complaint · v0.17.0 · Flujo de denuncia rediseñado (sin pausas intermedias · FlowStepper global) · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
@@ -9039,6 +9549,75 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.17.0 · STEP-FLOW-REDESIGN · 2026-05-15 · Flujo unificado sin pausas
+   Motivación: usuario reportó que el flujo tenía 3 "pausas" (resultado
+   del árbol, score, revisión) que hacían parecer que la denuncia ya
+   estaba terminada. Refactor para hacer el flujo continuo + revisión
+   final completa antes de enviar + resumen post-envío que da cierre.
+
+   Pausas eliminadas:
+   + /denunciar/resultado: Tree.selectOption ahora calcula la severidad
+     ancla in-line al terminar el árbol y navega DIRECTO a /probabilidad.
+     Se mostraba como una "pausa de resultado" antes; ahora el contexto
+     del caso identificado aparece como mini-card encabezando la 1ª
+     pregunta de probabilidad ("Caso identificado · aplica: Art X").
+   + /denunciar/score: Probability.answer en la 5ª respuesta calcula
+     probability + score + band y navega DIRECTO a /ubicacion. La
+     matriz visual + banda + autoridades viven ahora en la revisión
+     final donde la información tiene sentido contemplar antes de
+     enviar (y no antes de seguir capturando datos).
+   + Ambas rutas siguen registradas en Router como redirects defensivos
+     a su paso equivalente (links viejos no rompen).
+
+   Componentes nuevos:
+   + FlowStepper · indicador global sticky bajo el header con 5 pasos
+     claros: ① Identificar, ② Evaluar, ③ Ubicar, ④ Evidencia, ⑤ Revisar.
+     Visible solo en rutas /denunciar/*. Step actual destacado con
+     halo brand, completados con check verde, futuros bloqueados pero
+     pendientes-no-bloqueados clickeables para retroceder a un paso
+     anterior. Barras conectoras se pintan verdes al completar.
+   + Review.buildSummaryHtml() · helper compartido que construye el
+     resumen visual completo de una denuncia. Usado por Review (con
+     un draft) y por SentView (con un report). Garantiza paridad
+     visual antes/después del envío.
+
+   Revisión final completa:
+   + Banda hero destacado (igual estilo que era /score)
+   + 5 secciones numeradas: Hecho identificado · Cómo evaluamos ·
+     Dónde ocurrió · Evidencia · Quién recibirá la denuncia
+   + Delitos como tarjetas con artículo, prisión, multa, severidad
+     y marca de delito ancla si hay múltiples
+   + 5 barras visuales con las respuestas CONESA (extensión,
+     reversibilidad, recurrencia, vulnerabilidad, persistencia)
+   + Matriz 5×5 con la celda actual destacada
+   + Autoridades en tarjetas acumulativas (no solo emails listados)
+   + Callout del correo maestro
+   + Botón "Enviar" prominente al final + "Volver a evidencia"
+
+   Vista enviado rediseñada:
+   + Confirmación visual destacada (check grande, mensaje claro)
+   + Radicado destacado y clickable para copiar
+   + Acciones primarias arriba (PDF + Consultar estado en línea)
+   + Mismo summary completo que Review (cierra el bucle visual:
+     "esto es lo que recibieron las autoridades")
+   + Mini-mapa funcional, evidencias con lazy load de signed URLs
+   + Acciones secundarias al pie
+
+   Limpieza HTML/CSS:
+   + Vistas /ubicacion, /evidencias, /revision sin mini-stepper
+     redundante (los "Paso N de 6" duplicaban al FlowStepper global).
+     Mantienen solo botones Atrás/Cancelar en .tree-meta-compact.
+   + Probability.back en idx=0 ahora navega a /denunciar (árbol),
+     no a la pausa eliminada.
+   + Tree.cancel intacto, sigue pidiendo confirmación modal.
+
+   CSS nuevo:
+   + .flow-stepper + .flow-step (pending/current/done/locked)
+   + .summary-section + .step-pin + .prob-bars + .prob-bar-fill
+   + .master-email-callout + .case-mini-card
+   + .sent-confirmation + .sent-summary-wrapper + .sent-actions-top
+   + .tree-meta-compact (controles minimalistas)
+
    v0.16.0 · STEP-201..208 · 2026-05-14 · Fase 2 · Storage de evidencias
    STEP-201 · Setup SQL del bucket (docs/fase-2-storage-setup.sql)
    + Bucket privado 'evidencias' con file_size_limit 10 MB y allowed_mime_types
