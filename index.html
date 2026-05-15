@@ -8423,21 +8423,27 @@ const Admin = {
             <span id="cfg-ej-result" class="soft" style="font-size: 13px; align-self: center"></span>
           </div>
           <details style="margin-top: 12px">
-            <summary style="cursor: pointer; font-size: 13px; color: var(--text-soft)">¿Qué variables debe aceptar el template HTML?</summary>
-            <div style="padding: 12px 0; font-size: 12px; color: var(--text-soft)">
-              El template configurado en el dashboard de EmailJS debería usar estas variables:
-              <ul style="margin: 8px 0 0 18px; line-height: 1.7">
+            <summary style="cursor: pointer; font-size: 13px; color: var(--text-soft)">¿Cómo configurar el template HTML en EmailJS?</summary>
+            <div style="padding: 12px 0; font-size: 12px; color: var(--text-soft); line-height: 1.6">
+              <p style="margin: 0 0 8px"><strong>Pasos rápidos:</strong></p>
+              <ol style="margin: 0 0 12px 18px">
+                <li>Ve a tu template en <a href="https://dashboard.emailjs.com/admin/templates" target="_blank" rel="noopener" style="color: var(--brand-deep); font-weight: 600">dashboard.emailjs.com/admin/templates</a></li>
+                <li>En <strong>Settings</strong>: <code>To Email</code> = <code>{{to_email}}</code>, <code>From Name</code> = <code>{{from_name}}</code>, <code>Subject</code> = <code>{{subject}}</code>, <code>Reply To</code> = <code>{{reply_to}}</code></li>
+                <li>En <strong>Content</strong>: pega el HTML completo desde <a href="https://github.com/htc480/eco-complaint/blob/main/docs/fase-3-emailjs-template-guide.md" target="_blank" rel="noopener" style="color: var(--brand-deep); font-weight: 600">docs/fase-3-emailjs-template-guide.md</a></li>
+                <li>Click <strong>Save Changes</strong> y vuelve a probar aquí</li>
+              </ol>
+              <p style="margin: 0 0 6px"><strong>Variables disponibles en el template:</strong></p>
+              <ul style="margin: 0 0 0 18px">
                 <li><code>{{to_email}}</code> · destinatario</li>
-                <li><code>{{to_name}}</code> · nombre del destinatario (por defecto "Autoridad ambiental")</li>
+                <li><code>{{to_name}}</code> · nombre del destinatario ("Autoridad ambiental")</li>
                 <li><code>{{from_name}}</code> · "Eco-Complaint"</li>
                 <li><code>{{subject}}</code> · asunto del correo</li>
                 <li><code>{{radicado}}</code> · número de radicado</li>
-                <li><code>{{band_label}}</code> · banda de riesgo en texto (Bajo/Medio/Alto/Crítico/Extremo)</li>
-                <li><code>{{body}}</code> · cuerpo completo de la denuncia (texto plano multilínea)</li>
+                <li><code>{{band_label}}</code> · Bajo / Medio / Alto / Crítico / Extremo</li>
+                <li><code>{{body}}</code> · cuerpo completo (texto plano multilínea)</li>
                 <li><code>{{consulta_url}}</code> · URL pública para consultar el estado</li>
                 <li><code>{{reply_to}}</code> · correo maestro de radicación</li>
               </ul>
-              Si tu template usa otros nombres, ajusta <code>EmailService._params()</code> en el código.
             </div>
           </details>
         </div>`;
