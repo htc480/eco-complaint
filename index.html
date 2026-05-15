@@ -4964,6 +4964,11 @@ const Probability = {
     const draft = Persist.get('draft');
     if (!draft) return;
     draft.probabilityAnswers[qIdx] = val;
+    /* FIX · persistir inmediatamente después de asignar el valor.
+       Antes solo se persistía en cada branch (if/else), pero this.compute()
+       en el branch de la última pregunta lee desde Persist y veía la
+       respuesta aún como null → probability null → score NaN → banda 0. */
+    Persist.set('draft', draft);
     Audit.log('prob_select', 'report', null, { question: this.questions[qIdx].id, value: val });
     if (qIdx + 1 < this.questions.length) {
       draft.probabilityNode = qIdx + 1;
