@@ -21,6 +21,11 @@
        EmailJS      · cdn.jsdelivr.net
        Supabase API · *.supabase.co (REST + Realtime + Storage)
        Mapas tile   · *.openstreetmap.org -->
+<!-- Pre-production audit fixes:
+     - frame-ancestors REMOVIDO · solo funciona en header HTTP (no meta).
+       GitHub Pages no permite headers personalizados · limitación aceptada.
+     - manifest-src 'self' blob: · permite el manifest dinámico (PWA-lite).
+     - connect-src incluye CDNs para que source maps no generen warnings. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
   script-src 'self' 'unsafe-inline'
@@ -34,13 +39,17 @@
   font-src 'self' https://fonts.gstatic.com;
   img-src 'self' data: blob: https:;
   media-src 'self' data: blob: https:;
-  connect-src 'self'
+  manifest-src 'self' blob:;
+  connect-src 'self' blob:
     https://*.supabase.co
     wss://*.supabase.co
     https://*.supabase.in
     https://api.emailjs.com
-    https://*.tile.openstreetmap.org;
-  frame-ancestors 'none';
+    https://*.tile.openstreetmap.org
+    https://unpkg.com
+    https://cdnjs.cloudflare.com
+    https://esm.sh
+    https://cdn.jsdelivr.net;
   base-uri 'self';
   form-action 'self';
 ">
@@ -2656,13 +2665,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
         <!-- Indicador de backend activo + cuentas demo (visible solo en modo local) -->
         <div class="auth-backend-info" id="auth-backend-info"></div>
 
-        <div class="auth-demo" id="auth-demo-block">
-          <strong>Cuentas de demostración</strong>
-          Ingresa con un click para probar el sistema:
-          <div class="spacer-2"></div>
-          <button type="button" data-demo="ciudadano">maria@demo.co · ciudadano</button>
-          <button type="button" data-demo="admin">admin@demo.co · admin</button>
-        </div>
+        <!-- Pre-production audit: bloque demo se renderiza vía JS en
+             UI.updateAuthBackendInfo SOLO en modo localStorage. -->
+        <div id="auth-demo-block"></div>
       </div>
     </div>
   </section>
@@ -3019,7 +3024,24 @@ const Persist = {
   },
 
   bootstrap() {
-    if (!this.get('users')) {
+    /* Pre-production audit · solo crear usuarios demo si Backend está
+       en modo localStorage. En modo Supabase los usuarios reales viven
+       en auth.users + users_profile; los demos confunden al admin y
+       exponen credenciales públicas. Backend.init se llama antes en
+       init() para que isSupabase() sea confiable aquí. */
+    const inSupa = (typeof Backend !== 'undefined' && Backend.isSupabase && Backend.isSupabase());
+    if (inSupa) {
+      /* Migración one-shot · purga demos stale si existen */
+      const stale = this.get('users');
+      if (Array.isArray(stale) && stale.some(function(u) {
+        return u && (u.email === 'maria@demo.co' || u.email === 'admin@demo.co');
+      })) {
+        const cleaned = stale.filter(function(u) {
+          return u && u.email !== 'maria@demo.co' && u.email !== 'admin@demo.co';
+        });
+        this.set('users', cleaned);
+      }
+    } else if (!this.get('users')) {
       this.set('users', [
         { uid: 'demo-citizen', name: 'María Restrepo', email: 'maria@demo.co', password: 'demo', role: 'ciudadano', createdAt: new Date().toISOString(), denunciasCount: 0 },
         { uid: 'demo-admin',   name: 'Admin Demo',     email: 'admin@demo.co', password: 'demo', role: 'admin',     createdAt: new Date().toISOString(), denunciasCount: 0 }
@@ -3317,6 +3339,7 @@ const Audit = {
 const Backend = {
   _config: null,
   _client: null,
+  _clientPromise: null,    /* pre-prod audit · lock evita múltiples GoTrueClient */
   _status: 'idle',         /* idle | connecting | waking | ready | error */
   _lastDurationMs: 0,
   _lastError: null,
@@ -3338,23 +3361,33 @@ const Backend = {
   lastDuration()  { return this._lastDurationMs; },
   config()        { return this._config; },
 
-  /* Cliente Supabase lazy. Espera el SDK si aún no terminó de cargar.
-     Devuelve null si estamos en modo localStorage o si el SDK falló. */
+  /* Cliente Supabase lazy CON LOCK · pre-prod audit fix.
+     Antes: si dos call-sites llamaban client() en paralelo antes de
+     que el primer await terminara, ambos creaban un cliente. Eso
+     producía el warning "Multiple GoTrueClient instances detected".
+     Ahora: una promesa compartida (_clientPromise) garantiza que la
+     creación ocurra una sola vez bajo concurrencia. */
   async client() {
     if (this._client) return this._client;
     if (this._isPlaceholder()) return null;
     if (!window.__supabaseReady) return null;
-    try {
-      const createClient = await window.__supabaseReady;
-      this._client = createClient(this._config.url, this._config.anonKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-      });
-      return this._client;
-    } catch (e) {
-      console.error('[Backend] no se pudo crear cliente:', e);
-      this._lastError = e.message;
-      return null;
-    }
+    if (this._clientPromise) return this._clientPromise;
+    const self = this;
+    this._clientPromise = (async function() {
+      try {
+        const createClient = await window.__supabaseReady;
+        self._client = createClient(self._config.url, self._config.anonKey, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+        });
+        return self._client;
+      } catch (e) {
+        console.error('[Backend] no se pudo crear cliente:', e);
+        self._lastError = e.message;
+        self._clientPromise = null;
+        return null;
+      }
+    })();
+    return this._clientPromise;
   },
 
   /* Ping ligero al endpoint REST de Supabase. No requiere el SDK cargado
@@ -8923,11 +8956,13 @@ const Admin = {
             </tbody>
           </table>
         </div>
-        <div class="step-placeholder" style="margin-top: var(--s-6)">
-          <code>Fase 1 · STEP-102</code>
-          <h4>Migración a Supabase Auth</h4>
-          <p>En el siguiente STEP los usuarios se migran a Supabase Auth (Postgres + GoTrue) con verificación de correo, recuperación de contraseña y persistencia de sesión entre dispositivos. STEP-101 ya estableció la capa de abstracción <code>Backend</code>: revisa el estado de conexión en <a href="#/admin/config">/admin/config</a>.</p>
-        </div>
+        ${Backend.isSupabase() ? `
+        <p class="soft" style="font-size: 12px; margin-top: 12px">
+          💡 Esta tabla muestra el cache local de usuarios. Para la lista real desde Supabase ve a
+          <a href="#/admin/diagnostico" style="color: var(--brand-deep); font-weight: 600">/admin/diagnostico</a>
+          (sección "Últimos 10 usuarios registrados"). Para promover un usuario a <code>admin</code>:
+          Supabase Dashboard → Table Editor → <code>users_profile</code> → cambia <code>role</code> a <code>admin</code>.
+        </p>` : ''}
       `;
     }
   },
@@ -10274,7 +10309,10 @@ const UI = {
     if (active) active.focus();
   },
 
-  /* Render del indicador de backend + visibilidad de cuentas demo en /iniciar-sesion */
+  /* Render del indicador de backend + bloque demo dinámico
+     · pre-production audit · el bloque demo NO está en el HTML estático.
+     Se inyecta vía JS solo en modo localStorage para no exponer
+     credenciales públicas en el DOM en producción. */
   updateAuthBackendInfo() {
     var info = document.getElementById('auth-backend-info');
     var demo = document.getElementById('auth-demo-block');
@@ -10282,11 +10320,28 @@ const UI = {
     if (Backend.isSupabase()) {
       info.dataset.mode = 'supabase';
       info.textContent = '⚡ Backend: Supabase · cuentas reales';
-      if (demo) demo.style.display = 'none';
+      if (demo) { demo.innerHTML = ''; demo.className = ''; }
     } else {
       info.dataset.mode = 'local';
       info.textContent = '◇ Backend: localStorage (Fase 0) · solo este navegador';
-      if (demo) demo.style.display = '';
+      if (demo) {
+        demo.className = 'auth-demo';
+        demo.innerHTML = '<strong>Cuentas de demostración</strong>' +
+          ' Ingresa con un click para probar el sistema:' +
+          '<div class="spacer-2"></div>' +
+          '<button type="button" data-demo="ciudadano">maria@demo.co · ciudadano</button>' +
+          '<button type="button" data-demo="admin">admin@demo.co · admin</button>';
+        /* Re-bindear handlers de los botones recién creados */
+        demo.querySelectorAll('[data-demo]').forEach(function(b) {
+          b.addEventListener('click', function() {
+            var role = b.dataset.demo;
+            var em = document.getElementById('login-email');
+            var ps = document.getElementById('login-pass');
+            if (em) em.value = role === 'admin' ? 'admin@demo.co' : 'maria@demo.co';
+            if (ps) ps.value = 'demo';
+          });
+        });
+      }
     }
   },
 
@@ -10592,7 +10647,7 @@ function bindHandlers() {
         var a = actionEl.dataset.action;
         if (a === 'logout')       { Auth.logout().then(function(){ Toast.show('Sesión cerrada'); Router.navigate('/'); }); }
         if (a === 'goto-mine')    { Router.navigate('/mis-denuncias'); }
-        if (a === 'goto-profile') { Toast.show('Perfil llega en Fase 1'); }
+        if (a === 'goto-profile') { Router.navigate('/'); Toast.show('Perfil llega en una iteración futura · por ahora ejerce tus derechos ARCO desde el footer'); }
         closeUserMenu();
       }
       if (e.target.closest && e.target.closest('.admin-link')) {
@@ -10657,15 +10712,18 @@ function init() {
   try {
     diag('▸ init() inicio');
     injectManifest();              diag('✓ injectManifest');
-    Persist.bootstrap();           diag('✓ Persist.bootstrap');
+    /* Pre-production audit · Backend.init ANTES de Persist.bootstrap
+       para que el bootstrap sepa si está en supabase y no cree los
+       usuarios demo (ni los purgue si quedaron de un seed antiguo). */
     Backend.init();                diag('✓ Backend.init · ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'));
+    Persist.bootstrap();           diag('✓ Persist.bootstrap');
     bindHandlers();                diag('✓ bindHandlers');
     Router.init();                 diag('✓ Router.init · hash=' + (window.location.hash || '(vacío)'));
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.20.0', step: 'STEP-501..509 · Fase-5-hardening' });
-    console.log('%cEco-Complaint · v0.20.0 · Fase 5 (hardening · OWASP · Habeas Data · WCAG · security.txt)', 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.20.1', step: 'pre-production-audit' });
+    console.log('%cEco-Complaint · v0.20.1 · pre-production audit · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     /* Métrica de boot: tiempo total del init */
     if (typeof Metrics !== 'undefined' && window.performance && performance.timing) {
       const navStart = performance.timing.navigationStart || (Date.now() - 1000);
@@ -10674,7 +10732,10 @@ function init() {
         emailjs: EmailService.isConfigured() ? 'active' : 'off'
       });
     }
-    console.log('Demos: maria@demo.co · admin@demo.co · contraseña: demo');
+    /* Pre-production audit · loguear cuentas demo solo en modo localStorage */
+    if (!Backend.isSupabase()) {
+      console.log('Cuentas demo (solo modo local): maria@demo.co · admin@demo.co · contraseña: demo');
+    }
 
     /* Auth.restore() es async (puede llamar a supabase.auth.getSession).
        NO bloquea el init — el primer paint usa Auth.current() que arranca
@@ -10769,6 +10830,56 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.20.1 · pre-production audit · 2026-05-16
+   Limpieza visible para producción + STEPs diferidos en docs/SQL.
+
+   Bugs reportados por usuario:
+   + 'Mi perfil' del menú redirige y muestra mensaje claro (era Toast
+     placeholder "Perfil llega en Fase 1")
+   + Placeholder "Fase 1 · STEP-102 · Migración a Supabase Auth"
+     eliminado de /admin/usuarios · sustituido por nota informativa
+     en modo Supabase con link a /admin/diagnostico (lista real)
+   + Cuentas demo NO se crean en bootstrap si Backend = Supabase
+     · purga migratoria one-shot si quedaron del seed antiguo
+   + Bloque demo en /iniciar-sesion ya NO es HTML hardcoded ·
+     se renderiza vía JS solo en modo localStorage (las
+     credenciales públicas no aparecen en el DOM en producción)
+   + console.log de cuentas demo condicionado a modo local
+   + Reordenar init() · Backend.init ANTES de Persist.bootstrap
+     para que isSupabase() sea confiable en bootstrap
+
+   CSP fixes:
+   + frame-ancestors REMOVIDO · solo funciona en header HTTP
+     (GitHub Pages no permite headers personalizados · documentado
+     como limitación operativa)
+   + manifest-src 'self' blob: · PWA-lite ya no se bloquea
+   + Source maps de CDNs permitidos en connect-src · silencia
+     warnings sin afectar funcionalidad
+
+   GoTrueClient lock:
+   + Backend._clientPromise · garantiza una sola instancia bajo
+     concurrencia · elimina warning "Multiple GoTrueClient detected"
+
+   Documentación pre-producción nueva (sin tocar index.html):
+   + docs/fase-5-rate-limit-server.sql · trigger PostgreSQL
+     que aplica rate limit a INSERT en reports (3/5min y 10/hora
+     por usuario, 5/min global anónimos). Cierra STEP-503.
+   + docs/fase-5-auditoria-preproduccion.md · auditoría OWASP
+     Top 10 completa, decisiones aplicadas (ADRs 21-25), STEPs
+     diferidos con instrucciones, 8 escenarios de pentest manual
+     pre-defensa, 6 riesgos residuales aceptados. Cierra STEP-507.
+   + .github/dependabot.yml · monitoreo de github-actions +
+     plantilla para npm cuando se introduzca Vite. Cierra STEP-506.
+
+   NOTA · audit pre-producción etapa 2:
+   La integración completa de hCaptcha (STEP-502), Privacidad/
+   Seguridad views, refactor de users.render con UsersRepo, y
+   helper UI.escapeHtml en más sitios se aplicará en una iteración
+   separada. Razón: estos cambios al index.html introdujeron
+   templates literales anidados complejos que requieren refactor
+   cuidadoso para mantener node --check OK. Por ahora, los STEPs
+   diferidos quedan resueltos vía docs/SQL/dependabot.
+
    v0.20.0 · STEP-501..509 · 2026-05-16 · Fase 5 · Hardening + compliance
    Resumen · cierra fase con OWASP audit + Habeas Data Ley 1581 +
    WCAG críticos + security.txt equivalente + ADRs 18-20.

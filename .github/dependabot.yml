@@ -1,0 +1,41 @@
+# Dependabot · auto-detección de vulnerabilidades en dependencias
+# Documentación: https://docs.github.com/en/code-security/dependabot
+#
+# Configuración para Eco-Complaint:
+# - El proyecto NO tiene package.json (single-file con CDNs externos).
+#   Por eso solo monitoreamos GitHub Actions por ahora.
+# - Cuando se introduzca un build step (Vite, ver ADR-17), agregar
+#   un ecosystem: npm con el path donde viva el package.json.
+# - Para vulnerabilidades en las URLs de CDN (Leaflet, jsPDF, Supabase
+#   JS, EmailJS), activa adicionalmente Dependabot alerts:
+#   Settings → Code security and analysis → Dependabot alerts → Enable
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # NOTA · cuando exista package.json (Fase 5+ si se introduce Vite):
+  # - package-ecosystem: "npm"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #   open-pull-requests-limit: 5
+  #   labels:
+  #     - "dependencies"
+  #     - "javascript"
+  #   commit-message:
+  #     prefix: "deps"
+  #     include: "scope"
+  #   ignore:
+  #     - dependency-name: "*"
+  #       update-types: ["version-update:semver-major"]
