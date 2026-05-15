@@ -6011,7 +6011,9 @@ const EmailService = {
   },
 
   /* Envío de prueba: usa el primer parámetro como destinatario. No
-     toca el outbox. Útil para validar configuración desde admin. */
+     toca el outbox. Útil para validar configuración desde admin.
+     reply_to se rellena con un valor por defecto · algunos templates
+     fallan silenciosamente si el campo está vacío. */
   async testSend(toEmail) {
     if (!this._initIfNeeded()) {
       return { ok: false, error: 'SDK EmailJS no cargado o public_key faltante' };
@@ -6020,6 +6022,10 @@ const EmailService = {
     if (!cfg.service_id || !cfg.template_id) {
       return { ok: false, error: 'Configura service_id y template_id antes de probar' };
     }
+    const session = Auth.current();
+    const masterEmail = (ConfigRepo.getSync('authorities', {}) || {}).master_email
+                     || (session && session.email)
+                     || 'noreply@eco-complaint.local';
     const item = {
       to: toEmail,
       subject: '[Prueba] Configuración EmailJS · Eco-Complaint',
@@ -6027,7 +6033,12 @@ const EmailService = {
             'Si lo recibes correctamente, las notificaciones de denuncias funcionarán automáticamente.\n\n' +
             'Generado: ' + new Date().toLocaleString('es-CO'),
       report_radicado: 'TEST-' + Date.now(),
-      meta: { to_name: 'Administrador', from_name: 'Eco-Complaint · Test' }
+      meta: {
+        to_name: 'Administrador',
+        from_name: 'Eco-Complaint · Test',
+        reply_to: masterEmail,
+        band_label: 'PRUEBA'
+      }
     };
     return this.sendOne(item);
   }
@@ -8533,8 +8544,15 @@ const Admin = {
         try {
           const r = await EmailService.testSend(target);
           if (r.ok) {
-            if (result) result.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ Correo enviado a ' + target + '</span>';
-            Toast.show('Correo de prueba enviado · revisa la bandeja de ' + target);
+            if (result) result.innerHTML =
+              '<div style="color: var(--brand-deep); font-weight: 600; margin-bottom: 6px">✓ EmailJS aceptó el envío a ' + target + '</div>' +
+              '<div class="soft" style="font-size: 11px; line-height: 1.5; color: var(--text-soft)">' +
+              'Si NO llega en 1-2 minutos:' +
+              '<br>• Revisa <strong>Spam</strong> y la pestaña <strong>Promociones</strong> de la bandeja.' +
+              '<br>• Verifica que el template tenga <code>{{to_email}}</code> en el campo <strong>"To Email"</strong> del dashboard de EmailJS.' +
+              '<br>• Si el destinatario es la misma cuenta vinculada a EmailJS, Gmail puede no entregárselo a sí mismo · prueba con otro email.' +
+              '</div>';
+            Toast.show('EmailJS reportó OK · si no llega, revisa el template y la carpeta de spam', 'ok', 5000);
             Audit.log('emailjs_test_send', 'system', null, { to: target, ok: true });
           } else {
             if (result) result.innerHTML = '<span style="color: var(--alarm)">✗ ' + r.error + '</span>';
