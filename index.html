@@ -6,6 +6,44 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Content Security Policy · STEP-501 · Fase 5
+     Limita orígenes permitidos para scripts/estilos/imágenes/conexiones.
+     'unsafe-inline' en script-src es necesario porque toda la lógica
+     vive inline en este HTML (ADR-01 single-file). Sin ello, el archivo
+     no cargaría sus propios <script>. Cuando Fase 5+ extraiga el JS a
+     archivos separados, este 'unsafe-inline' puede retirarse.
+     Orígenes externos explícitos · ningún wildcard:
+       Google Fonts · fonts.googleapis.com / fonts.gstatic.com
+       Leaflet     · unpkg.com
+       jsPDF        · cdnjs.cloudflare.com
+       Supabase JS  · esm.sh (ESM modular)
+       EmailJS      · cdn.jsdelivr.net
+       Supabase API · *.supabase.co (REST + Realtime + Storage)
+       Mapas tile   · *.openstreetmap.org -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline'
+    https://unpkg.com
+    https://cdnjs.cloudflare.com
+    https://esm.sh
+    https://cdn.jsdelivr.net;
+  style-src 'self' 'unsafe-inline'
+    https://fonts.googleapis.com
+    https://unpkg.com;
+  font-src 'self' https://fonts.gstatic.com;
+  img-src 'self' data: blob: https:;
+  media-src 'self' data: blob: https:;
+  connect-src 'self'
+    https://*.supabase.co
+    wss://*.supabase.co
+    https://*.supabase.in
+    https://api.emailjs.com
+    https://*.tile.openstreetmap.org;
+  frame-ancestors 'none';
+  base-uri 'self';
+  form-action 'self';
+">
 <meta name="description" content="Eco-Complaint — Plataforma ciudadana de denuncia de delitos ambientales (Colombia · Ley 2111/2021)">
 <title>Eco-Complaint · Denuncia ciudadana de delitos ambientales</title>
 
@@ -538,6 +576,75 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .sent-actions-top {
   display: flex; justify-content: center; gap: var(--s-3);
   flex-wrap: wrap; margin-bottom: var(--s-5);
+}
+
+/* ============================================================
+   5d · WCAG y páginas legales · STEP-505/508 · Fase 5
+   ============================================================ */
+.skip-to-main {
+  position: absolute; top: -100px; left: 0;
+  background: var(--brand-deep); color: white;
+  padding: 12px 20px; text-decoration: none;
+  font-weight: 600; font-size: 14px;
+  border-radius: 0 0 8px 0; z-index: 10000;
+  transition: top 0.2s;
+}
+.skip-to-main:focus {
+  top: 0;
+  outline: 3px solid var(--brand-light); outline-offset: 2px;
+}
+
+.app-footer {
+  margin-top: var(--s-12);
+  padding: var(--s-6) var(--s-5);
+  background: var(--bg-card);
+  border-top: 1px solid var(--line);
+}
+.app-footer-inner {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--s-6); flex-wrap: wrap;
+  max-width: var(--w-wide); margin: 0 auto;
+}
+.app-footer-brand strong {
+  display: block; font-family: var(--font-display);
+  font-size: 16px; color: var(--text); margin-bottom: 4px;
+}
+.app-footer-brand span {
+  font-size: 12px; color: var(--text-muted);
+}
+.app-footer-nav {
+  display: flex; gap: var(--s-5); flex-wrap: wrap;
+}
+.app-footer-nav a {
+  font-size: 13px; color: var(--text-soft);
+  text-decoration: none; font-weight: 500;
+  padding: 4px 0; border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.app-footer-nav a:hover { color: var(--brand-deep); border-color: var(--brand-soft); }
+.app-footer-nav a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 2px; }
+
+.legal-section {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: var(--s-5) var(--s-6);
+  margin-bottom: var(--s-4);
+}
+.legal-section h2 {
+  font-family: var(--font-display); font-size: var(--t-19);
+  margin: 0 0 var(--s-3) 0; color: var(--text);
+  padding-bottom: var(--s-2); border-bottom: 1px solid var(--line);
+}
+.legal-section p, .legal-section ul {
+  font-size: 14px; line-height: 1.7; color: var(--text);
+  margin: 0 0 var(--s-3) 0;
+}
+.legal-section ul { padding-left: 22px; }
+.legal-section li { margin-bottom: 6px; }
+.legal-section pre {
+  font-size: 12px; line-height: 1.6;
+  background: var(--bg-subtle); padding: 16px; border-radius: 8px;
+  border: 1px solid var(--line);
+  overflow-x: auto; white-space: pre;
 }
 
 /* Mini-resumen del caso identificado (encabezado de la sección
@@ -2305,6 +2412,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 <div id="toasts" aria-live="polite" aria-atomic="true"></div>
 
 <!-- Banner de modo invitado (visible solo cuando aplica) -->
+<!-- Skip-to-main · WCAG 2.4.1 Bypass Blocks · STEP-505 -->
+<a class="skip-to-main" href="#app-main">Saltar al contenido principal</a>
+
 <div class="guest-banner hidden" id="guest-banner" role="status">
   <strong>Modo invitado activo</strong> · tu denuncia será anónima y no podrás darle seguimiento desde una cuenta.
 </div>
@@ -2508,13 +2618,21 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
               <label class="label" for="signup-pass2">Confirmar contraseña</label>
               <input class="input" type="password" id="signup-pass2" placeholder="Repítela" required autocomplete="new-password">
             </div>
+            <div class="signup-consent">
+              <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-soft); cursor: pointer; line-height: 1.5">
+                <input type="checkbox" id="signup-consent" required style="margin-top: 3px; flex-shrink: 0">
+                <span>
+                  He leído y acepto la <a href="#/privacidad" target="_blank" rel="noopener" style="color: var(--brand-deep); font-weight: 600">política de tratamiento de datos personales</a> conforme a la Ley 1581 de 2012. Entiendo que puedo ejercer mis derechos ARCO (acceso, rectificación, cancelación, oposición) en cualquier momento.
+                </span>
+              </label>
+            </div>
             <div class="auth-actions">
               <button type="submit" class="btn btn-primary btn-lg" id="signup-submit">Crear cuenta</button>
               <button type="button" class="btn btn-ghost" data-auth-switch="login">Ya tengo cuenta</button>
             </div>
           </form>
           <div class="auth-foot soft" style="font-size: 12px">
-            Al crear una cuenta aceptas que tus denuncias queden asociadas a tu identidad verificada (correo electrónico). Tus datos personales no se publican en la consulta pública.
+            Tus datos personales no se publican en la consulta pública. Solo se asocian a las denuncias que tú creas no-anónimamente.
           </div>
         </div>
 
@@ -2796,6 +2914,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     </div>
   </section>
 
+  <!-- PRIVACIDAD · Habeas Data Ley 1581 de 2012 · STEP-504 -->
+  <section class="view" id="view-privacidad" data-route="/privacidad">
+    <div class="container-narrow">
+      <div id="privacidad-container"></div>
+    </div>
+  </section>
+
+  <!-- SEGURIDAD · responsible disclosure + security.txt · STEP-508 -->
+  <section class="view" id="view-seguridad" data-route="/seguridad">
+    <div class="container-narrow">
+      <div id="seguridad-container"></div>
+    </div>
+  </section>
+
   <!-- 404 -->
   <section class="view" id="view-404" data-route="*">
     <div class="container-narrow center" style="padding-top: 80px;">
@@ -2809,6 +2941,21 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   </section>
 
 </main>
+
+<!-- FOOTER · STEP-505/508 · WCAG · privacidad y seguridad accesibles -->
+<footer class="app-footer" role="contentinfo">
+  <div class="app-footer-inner">
+    <div class="app-footer-brand">
+      <strong>Eco-Complaint</strong>
+      <span>Plataforma ciudadana de denuncia ambiental · Ley 2111 de 2021</span>
+    </div>
+    <nav class="app-footer-nav" aria-label="Enlaces legales">
+      <a href="#/privacidad">Privacidad · Habeas Data</a>
+      <a href="#/seguridad">Seguridad</a>
+      <a href="#/contacto">Contacto</a>
+    </nav>
+  </div>
+</footer>
 
 <script>
 'use strict';
@@ -4660,7 +4807,9 @@ const Router = {
     { path: '/admin/exportar',       view: 'view-admin',          requires: 'admin', adminSub: 'export'  },
     { path: '/admin/outbox',         view: 'view-admin',          requires: 'admin', adminSub: 'outbox'  },
     { path: '/admin/diagnostico',    view: 'view-admin',          requires: 'admin', adminSub: 'diagnostico' },
-    { path: '/admin/metricas',       view: 'view-admin',          requires: 'admin', adminSub: 'metricas' }
+    { path: '/admin/metricas',       view: 'view-admin',          requires: 'admin', adminSub: 'metricas' },
+    { path: '/privacidad',           view: 'view-privacidad' },
+    { path: '/seguridad',            view: 'view-seguridad' }
   ],
   init() { window.addEventListener('hashchange', () => this.resolve()); this.resolve(); },
   navigate(path) { window.location.hash = '#' + path; },
@@ -4716,6 +4865,8 @@ const Router = {
     if (route.view === 'view-consulta')       PublicLookup.render();
     if (route.view === 'view-contacto')       Contact.render();
     if (route.view === 'view-login')          UI.updateAuthBackendInfo();
+    if (route.view === 'view-privacidad')     Privacidad.render();
+    if (route.view === 'view-seguridad')      Seguridad.render();
 
     Store.set({ route: hash });
     Audit.log('navigate', 'route', hash);
@@ -5918,24 +6069,27 @@ const EvidenceView = {
     const counter = document.getElementById('ev-counter');
     if (!grid || !counter) return;
     counter.innerHTML = I18n.t('ev.counter', { n: evidenceList.length, max: Evidence.MAX_FILES });
+    /* STEP-501 · ev.name y ev.description vienen del usuario · escapamos */
     grid.innerHTML = evidenceList.map(ev => {
       const sizeKb = Math.round(ev.size / 1024);
       const sizeStr = sizeKb > 1024 ? (sizeKb / 1024).toFixed(1) + ' MB' : sizeKb + ' KB';
       const src = this.thumbSrcSync(ev);
-      const pathAttr = ev.path ? ` data-ev-path="${ev.path}"` : '';
-      const srcAttr = src ? ` src="${src}"` : '';
+      const pathAttr = ev.path ? ` data-ev-path="${UI.escapeHtml(ev.path)}"` : '';
+      const srcAttr = src ? ` src="${UI.escapeHtml(src)}"` : '';
+      const nameSafe = UI.escapeHtml(ev.name);
+      const descSafe = UI.escapeHtml(ev.description || '');
       const thumb = ev.type === 'image'
-        ? `<img${srcAttr}${pathAttr} alt="${ev.name}">`
+        ? `<img${srcAttr}${pathAttr} alt="${nameSafe}">`
         : `<video${srcAttr}${pathAttr} muted></video>`;
       return `
-        <div class="ev-card" data-ev-id="${ev.id}">
-          <div class="ev-thumb">${thumb}<span class="ev-thumb-badge">${ev.type}</span></div>
+        <div class="ev-card" data-ev-id="${UI.escapeHtml(ev.id)}">
+          <div class="ev-thumb">${thumb}<span class="ev-thumb-badge">${UI.escapeHtml(ev.type)}</span></div>
           <div class="ev-info">
-            <div class="ev-info-name" title="${ev.name}">${ev.name}</div>
+            <div class="ev-info-name" title="${nameSafe}">${nameSafe}</div>
             <div class="ev-info-size">${sizeStr}</div>
-            <textarea placeholder="Descripción opcional..." data-ev-desc="${ev.id}">${ev.description || ''}</textarea>
+            <textarea placeholder="Descripción opcional..." data-ev-desc="${UI.escapeHtml(ev.id)}">${descSafe}</textarea>
           </div>
-          <button class="ev-card-remove" data-ev-remove="${ev.id}">Eliminar</button>
+          <button class="ev-card-remove" data-ev-remove="${UI.escapeHtml(ev.id)}">Eliminar</button>
         </div>
       `;
     }).join('');
@@ -7850,6 +8004,279 @@ const Contact = {
   }
 };
 
+/* === I.21 · PRIVACIDAD · Habeas Data Ley 1581 de 2012 · STEP-504 ====
+   Vista pública con la política de tratamiento de datos personales,
+   los derechos ARCO (Acceso, Rectificación, Cancelación, Oposición)
+   y el botón de derecho al olvido (eliminar mi cuenta y mis denuncias).
+   El botón solo aparece para usuarios autenticados. */
+const Privacidad = {
+  render() {
+    const root = document.getElementById('privacidad-container');
+    if (!root) return;
+    const session = Auth.current();
+    const contact = ConfigRepo.getSync('contact', {}) || {};
+    const orgName = UI.escapeHtml(contact.org_name || 'Eco-Complaint');
+    const privEmail = UI.escapeHtml(contact.email || 'privacidad@eco-complaint.demo.co');
+
+    root.innerHTML = `
+      <div class="page-head">
+        <span class="pill">Habeas Data · Ley 1581 de 2012</span>
+        <h1>Política de tratamiento de datos personales</h1>
+        <p>Cumplimiento con la legislación colombiana de protección de datos. Última actualización: ${new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>
+      </div>
+
+      <div class="legal-section">
+        <h2>1 · Responsable del tratamiento</h2>
+        <p><strong>${orgName}</strong> es responsable del tratamiento de los datos personales recolectados a través de esta plataforma. Para cualquier solicitud relacionada con tus datos, contacta:</p>
+        <p><strong>Correo:</strong> <a href="mailto:${privEmail}">${privEmail}</a></p>
+      </div>
+
+      <div class="legal-section">
+        <h2>2 · Datos que recolectamos</h2>
+        <ul>
+          <li><strong>Cuenta:</strong> nombre, correo electrónico, contraseña (cifrada por el proveedor de autenticación · nunca la vemos en texto plano).</li>
+          <li><strong>Denuncia identificada:</strong> los hechos que describes, ubicación que indicas, evidencias que subes, y la asociación con tu cuenta.</li>
+          <li><strong>Denuncia anónima:</strong> los hechos, ubicación y evidencias · <em>sin</em> asociación a cuenta. No podemos reconstruir tu identidad a partir de una denuncia anónima.</li>
+          <li><strong>Bitácora de uso:</strong> acciones que realizas en la plataforma (navegación, envíos, cambios de estado) con timestamp. No recolectamos cookies de terceros ni huellas digitales del navegador.</li>
+        </ul>
+      </div>
+
+      <div class="legal-section">
+        <h2>3 · Para qué usamos tus datos</h2>
+        <ul>
+          <li><strong>Procesamiento de denuncias:</strong> notificar a las autoridades ambientales competentes según la banda de riesgo calculada.</li>
+          <li><strong>Seguimiento del caso:</strong> permitirte consultar el estado de tus denuncias en cualquier momento.</li>
+          <li><strong>Mejora de la plataforma:</strong> agregar estadísticas anónimas para detectar patrones de delitos ambientales (sin identificar a denunciantes individuales).</li>
+          <li><strong>Cumplimiento legal:</strong> conservar registros de denuncias para auditoría jurídica.</li>
+        </ul>
+        <p><strong>Lo que NO hacemos:</strong> no vendemos tus datos, no los compartimos con terceros distintos a las autoridades competentes, no usamos publicidad dirigida, no rastreamos tu actividad fuera de la plataforma.</p>
+      </div>
+
+      <div class="legal-section">
+        <h2>4 · Tus derechos · ARCO</h2>
+        <p>La Ley 1581 de 2012 te otorga cuatro derechos sobre tus datos:</p>
+        <ul>
+          <li><strong>Acceso:</strong> conocer qué datos tenemos sobre ti.</li>
+          <li><strong>Rectificación:</strong> corregir datos inexactos.</li>
+          <li><strong>Cancelación (derecho al olvido):</strong> eliminar tus datos cuando no sean necesarios o lo solicites.</li>
+          <li><strong>Oposición:</strong> negarte a ciertos tratamientos.</li>
+        </ul>
+        ${session ? `
+          <div class="info-card-soft" style="margin-top: var(--s-4)">
+            <p><strong>Acción directa disponible:</strong></p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px">
+              <button class="btn btn-soft btn-sm" id="priv-export-btn">⤓ Exportar mis datos (JSON)</button>
+              <button class="btn btn-ghost btn-sm" id="priv-erase-btn" style="color: var(--alarm); border-color: var(--alarm-soft)">⚠ Eliminar mi cuenta y mis denuncias</button>
+            </div>
+            <p class="soft" style="font-size: 12px; margin-top: 12px">
+              "Exportar" descarga un JSON con tu perfil + todas tus denuncias identificadas.<br>
+              "Eliminar" borra tu perfil + denuncias asociadas (las anónimas no se eliminan porque no son atribuibles a ti).<br>
+              Para eliminación completa de la cuenta de autenticación (auth.users), escribe a <a href="mailto:${privEmail}">${privEmail}</a>.
+            </p>
+            <div id="priv-action-result" style="margin-top: 10px"></div>
+          </div>
+        ` : `
+          <div class="info-card-soft" style="margin-top: var(--s-4)">
+            <p><strong>¿Quieres ejercer estos derechos?</strong></p>
+            <ul style="margin: 8px 0 0 16px; font-size: 14px">
+              <li>Si tienes cuenta: <a href="#/iniciar-sesion" style="color: var(--brand-deep); font-weight: 600">inicia sesión</a> y vuelve a esta página para encontrar botones directos.</li>
+              <li>Si no tienes cuenta o tu denuncia es anónima: contáctanos a <a href="mailto:${privEmail}">${privEmail}</a> con el detalle de tu solicitud.</li>
+            </ul>
+          </div>
+        `}
+      </div>
+
+      <div class="legal-section">
+        <h2>5 · Retención de datos</h2>
+        <p>Las denuncias se conservan indefinidamente para fines de auditoría jurídica, salvo solicitud expresa de eliminación. Las evidencias multimedia se conservan por 365 días desde la fecha de denuncia (configurable). Las bitácoras de uso se mantienen por 1000 entradas (rotación automática).</p>
+      </div>
+
+      <div class="legal-section">
+        <h2>6 · Seguridad técnica</h2>
+        <p>Para detalles sobre nuestras medidas de seguridad técnica (cifrado en tránsito, control de acceso por roles, defensa contra inyecciones, etc.), consulta nuestra <a href="#/seguridad" style="color: var(--brand-deep); font-weight: 600">política de seguridad técnica</a>.</p>
+      </div>
+
+      <div class="legal-section">
+        <h2>7 · Cambios a esta política</h2>
+        <p>Notificaremos cambios significativos por correo a usuarios registrados. Los cambios menores se publican aquí con la fecha de actualización al inicio.</p>
+      </div>
+
+      <div class="legal-section">
+        <h2>8 · Marco normativo</h2>
+        <ul>
+          <li>Ley 1581 de 2012 · Régimen general de protección de datos personales en Colombia.</li>
+          <li>Decreto 1377 de 2013 · Reglamentación parcial de la ley anterior.</li>
+          <li>Ley 2111 de 2021 · Delitos ambientales (objeto principal de esta plataforma).</li>
+          <li>Resolución 1289 de 2018 SIC · Guía de implementación del régimen de protección de datos.</li>
+        </ul>
+      </div>
+    `;
+
+    if (session) {
+      const exportBtn = document.getElementById('priv-export-btn');
+      const eraseBtn = document.getElementById('priv-erase-btn');
+      const resultEl = document.getElementById('priv-action-result');
+
+      if (exportBtn) exportBtn.onclick = async function() {
+        exportBtn.disabled = true;
+        const orig = exportBtn.textContent;
+        exportBtn.textContent = '⏳ Exportando…';
+        try {
+          let payload;
+          if (Backend.isSupabase()) {
+            const client = await Backend.client();
+            const { data, error } = await client.rpc('export_my_data');
+            if (error) throw error;
+            payload = data;
+          } else {
+            payload = {
+              ok: true,
+              exported_at: new Date().toISOString(),
+              profile: session,
+              reports: (Persist.get('reports', []) || []).filter(function(r){ return r.user_id === session.uid; })
+            };
+          }
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'eco-complaint-mis-datos-' + Date.now() + '.json';
+          a.click();
+          setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+          Audit.log('habeas_data_export', 'session', session.uid);
+          if (resultEl) resultEl.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ Datos exportados</span>';
+        } catch (e) {
+          if (resultEl) resultEl.innerHTML = '<span style="color: var(--alarm)">✗ ' + (e.message || e) + '</span>';
+        } finally {
+          exportBtn.disabled = false;
+          exportBtn.textContent = orig;
+        }
+      };
+
+      if (eraseBtn) eraseBtn.onclick = async function() {
+        const ok1 = await Modal.confirm({
+          title: 'Eliminar mi cuenta y mis denuncias',
+          body: 'Esta acción es IRREVERSIBLE. Se eliminarán: tu perfil de usuario y TODAS tus denuncias identificadas. Las denuncias anónimas que hayas creado NO se eliminan porque no son atribuibles a ti. ¿Confirmas?',
+          confirmText: 'Sí, entiendo · continuar',
+          cancelText: 'Cancelar',
+          danger: true
+        });
+        if (!ok1) return;
+        const ok2 = await Modal.confirm({
+          title: 'Última confirmación',
+          body: 'Escribe mentalmente "OK" para confirmar. Tras esto no podrás recuperar las denuncias eliminadas. Tu cuenta de autenticación (correo + contraseña) permanece y puedes solicitar su eliminación final escribiendo a privacidad.',
+          confirmText: 'Eliminar ahora',
+          cancelText: 'Cancelar',
+          danger: true
+        });
+        if (!ok2) return;
+        eraseBtn.disabled = true;
+        const orig = eraseBtn.textContent;
+        eraseBtn.textContent = '⏳ Eliminando…';
+        try {
+          if (Backend.isSupabase()) {
+            const client = await Backend.client();
+            const { data, error } = await client.rpc('erase_my_data');
+            if (error) throw error;
+            if (!data || !data.ok) throw new Error((data && data.error) || 'unknown');
+            Audit.log('habeas_data_erase', 'session', session.uid, data);
+            if (resultEl) resultEl.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ ' + data.reports_deleted + ' denuncia(s) eliminadas · ' + data.audit_deleted + ' entradas de bitácora · ' + (data.note || '') + '</span>';
+          } else {
+            const reports = (Persist.get('reports', []) || []).filter(function(r){ return r.user_id !== session.uid; });
+            const removed = (Persist.get('reports', []) || []).length - reports.length;
+            Persist.set('reports', reports);
+            const users = (Persist.get('users', []) || []).filter(function(u){ return u.uid !== session.uid; });
+            Persist.set('users', users);
+            Audit.log('habeas_data_erase', 'session', session.uid, { reports_deleted: removed });
+            if (resultEl) resultEl.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ ' + removed + ' denuncia(s) y cuenta local eliminadas</span>';
+          }
+          Toast.show('Datos eliminados · cerrando sesión...', 'ok', 4000);
+          setTimeout(async function() {
+            await Auth.logout();
+            Router.navigate('/');
+          }, 2500);
+        } catch (e) {
+          if (resultEl) resultEl.innerHTML = '<span style="color: var(--alarm)">✗ ' + (e.message || e) + '</span>';
+          eraseBtn.disabled = false;
+          eraseBtn.textContent = orig;
+        }
+      };
+    }
+  }
+};
+
+/* === I.22 · SEGURIDAD · responsible disclosure · STEP-508 ===========
+   Vista pública con la política de divulgación responsable y el
+   contenido equivalente a security.txt (RFC 9116). Esto da a
+   investigadores de seguridad un canal claro para reportar
+   vulnerabilidades sin temor a represalias legales. */
+const Seguridad = {
+  render() {
+    const root = document.getElementById('seguridad-container');
+    if (!root) return;
+    const contact = ConfigRepo.getSync('contact', {}) || {};
+    const secEmail = UI.escapeHtml(contact.email || 'seguridad@eco-complaint.demo.co');
+
+    root.innerHTML = `
+      <div class="page-head">
+        <span class="pill">Política de seguridad · responsible disclosure</span>
+        <h1>Política de seguridad técnica</h1>
+        <p>Cómo reportar vulnerabilidades, qué prácticas seguimos internamente, y qué expectativas razonables establecemos.</p>
+      </div>
+
+      <div class="legal-section">
+        <h2>1 · Reporte de vulnerabilidades</h2>
+        <p>Si encuentras una vulnerabilidad de seguridad en Eco-Complaint, escríbenos a:</p>
+        <p style="font-size: 17px; font-weight: 600"><a href="mailto:${secEmail}">${secEmail}</a></p>
+        <p>Te respondemos en máximo <strong>7 días hábiles</strong> con un acuse de recibo y un canal de seguimiento. Te pedimos:</p>
+        <ul>
+          <li>No publicar la vulnerabilidad antes de 90 días desde el reporte (responsible disclosure).</li>
+          <li>No acceder a datos de otros usuarios más allá de lo estrictamente necesario para probar la vulnerabilidad.</li>
+          <li>No degradar el servicio ni saturar la cuota gratuita del backend.</li>
+        </ul>
+        <p>A cambio, no emprenderemos acciones legales contra investigadores de buena fe que sigan estas reglas.</p>
+      </div>
+
+      <div class="legal-section">
+        <h2>2 · Medidas de seguridad activas</h2>
+        <ul>
+          <li><strong>HTTPS extremo a extremo:</strong> servido desde GitHub Pages con TLS automático.</li>
+          <li><strong>Content Security Policy:</strong> meta tag restringe orígenes de scripts, estilos, conexiones e imágenes.</li>
+          <li><strong>RLS de Postgres:</strong> control de acceso a nivel de fila para reports, users_profile, audit_log y config (Supabase).</li>
+          <li><strong>Bucket de evidencias privado:</strong> sin acceso público directo; solo URLs firmadas con caducidad de 7 días.</li>
+          <li><strong>Escape HTML:</strong> todo input del usuario se escapa antes de inyectarse al DOM (mitigación XSS).</li>
+          <li><strong>Rate limit local:</strong> máximo 3 denuncias en 5 min y 10 por hora desde un navegador. (Mejora en proceso · server-side.)</li>
+          <li><strong>Auditoría completa:</strong> cada acción se registra en audit_log con timestamp y uid.</li>
+        </ul>
+      </div>
+
+      <div class="legal-section">
+        <h2>3 · Limitaciones conocidas</h2>
+        <p>Para transparencia, declaramos los riesgos aceptados:</p>
+        <ul>
+          <li>SDKs de terceros (Leaflet, jsPDF, Supabase JS, EmailJS) se cargan sin atributos <code>integrity</code> por compatibilidad con Safari iOS y file:// origin. Mitigación: orígenes restringidos en CSP.</li>
+          <li>Rate limit es local (cliente); un atacante con DevTools puede saltarlo. Mitigación planeada: <code>App Check</code> o reCAPTCHA invisible en el lado del servidor.</li>
+          <li>El cuerpo del email a autoridades se construye en el cliente; un atacante con la anon key podría intentar abuso de envío. Mitigación: rate limit + monitoreo de cuota de EmailJS.</li>
+          <li>No hay verificación en 2 factores en el login. Mitigación: planeada para una fase futura cuando el volumen de usuarios lo justifique.</li>
+        </ul>
+      </div>
+
+      <div class="legal-section">
+        <h2>4 · Equivalente a <code>security.txt</code> (RFC 9116)</h2>
+        <p>Esta plataforma se sirve desde un sitio estático (GitHub Pages) sin acceso a la configuración del servidor para colocar <code>/.well-known/security.txt</code>. La información equivalente la publicamos aquí:</p>
+        <pre style="background: var(--bg-subtle); padding: 16px; border-radius: 8px; font-size: 12px; line-height: 1.6; overflow-x: auto">Contact: mailto:${secEmail}
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: es, en
+Canonical: https://htc480.github.io/eco-complaint/#/seguridad
+Policy: https://htc480.github.io/eco-complaint/#/seguridad</pre>
+      </div>
+
+      <div class="legal-section">
+        <h2>5 · Reconocimientos</h2>
+        <p>Investigadores que reporten vulnerabilidades válidas siguiendo esta política serán reconocidos públicamente (con su autorización) en esta página. Actualmente no contamos con un programa de recompensas monetarias (bug bounty); como proyecto académico, el reconocimiento es nuestro único agradecimiento formal.</p>
+      </div>
+    `;
+  }
+};
 
 /* === J · ADMIN · suite completa de vistas administrativas (STEP-005) === */
 const AdminViews = {
@@ -8362,7 +8789,7 @@ const Admin = {
           ${r.reporter_description ? `
             <div class="drawer-section">
               <h5>Descripción del denunciante</h5>
-              <p style="white-space: pre-wrap; font-size: 14px; line-height: 1.5; background: var(--bg-subtle); padding: 12px 16px; border-radius: var(--r-md)">${r.reporter_description}</p>
+              <p style="white-space: pre-wrap; font-size: 14px; line-height: 1.5; background: var(--bg-subtle); padding: 12px 16px; border-radius: var(--r-md)">${UI.escapeHtml(r.reporter_description)}</p>
             </div>` : ''}
 
           <div class="drawer-section">
@@ -8486,10 +8913,10 @@ const Admin = {
             <tbody>
               ${userStats.map(u => `
                 <tr>
-                  <td class="mono">${u.uid}</td>
-                  <td><strong>${u.name}</strong></td>
-                  <td class="mono">${u.email}</td>
-                  <td><span class="status-pill" data-status="${u.role === 'admin' ? 'in_progress' : 'received'}">${u.role}</span></td>
+                  <td class="mono">${UI.escapeHtml(u.uid)}</td>
+                  <td><strong>${UI.escapeHtml(u.name)}</strong></td>
+                  <td class="mono">${UI.escapeHtml(u.email)}</td>
+                  <td><span class="status-pill" data-status="${u.role === 'admin' ? 'in_progress' : 'received'}">${UI.escapeHtml(u.role)}</span></td>
                   <td class="center">${u.reportsCount}</td>
                   <td>${new Date(u.createdAt).toLocaleDateString('es-CO')}</td>
                 </tr>`).join('')}
@@ -9447,9 +9874,9 @@ const Admin = {
         <tbody>
           ${r.items.map(u => `
             <tr>
-              <td class="mono" style="font-size: 12px">${u.email || '—'}</td>
-              <td>${u.name || '<span class="muted">—</span>'}</td>
-              <td><span class="status-pill" data-status="${u.role === 'admin' ? 'in_progress' : 'received'}">${u.role}</span></td>
+              <td class="mono" style="font-size: 12px">${UI.escapeHtml(u.email || '—')}</td>
+              <td>${u.name ? UI.escapeHtml(u.name) : '<span class="muted">—</span>'}</td>
+              <td><span class="status-pill" data-status="${u.role === 'admin' ? 'in_progress' : 'received'}">${UI.escapeHtml(u.role)}</span></td>
               <td style="font-size: 12px">${u.created_at ? new Date(u.created_at).toLocaleDateString('es-CO') : '—'}</td>
             </tr>`).join('')}
         </tbody>
@@ -9757,6 +10184,23 @@ const Admin = {
 
 /* === K · UI === */
 const UI = {
+  /* STEP-501 · Audit XSS · Fase 5
+     Helper para escapar texto que vendrá de usuarios (nombres de archivo,
+     descripciones, nombres de cuenta) cuando se inyecta en innerHTML o
+     en atributos HTML. Cubre los 5 caracteres peligrosos: & < > " '.
+     Uso obligatorio en cualquier ${...} dentro de innerHTML cuando la
+     fuente es user-controlled.
+     ADR-18 · documentado en docs/fase-5-memoria-tecnica.md */
+  escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
   updateNav() {
     const session = Auth.current();
     const route = Store.get().route;
@@ -9783,8 +10227,8 @@ const UI = {
       const initials = session.name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
       ua.innerHTML = `
         <button class="user-chip" id="user-chip" aria-haspopup="true" aria-expanded="false">
-          <span><span class="user-chip-name">${session.name}</span><br><span class="user-chip-role">${session.role}</span></span>
-          <span class="user-avatar">${initials}</span>
+          <span><span class="user-chip-name">${UI.escapeHtml(session.name)}</span><br><span class="user-chip-role">${UI.escapeHtml(session.role)}</span></span>
+          <span class="user-avatar">${UI.escapeHtml(initials)}</span>
         </button>
         <div class="user-menu-pop" id="user-menu-pop" role="menu">
           <button class="user-menu-item" data-action="goto-profile">Mi perfil</button>
@@ -10010,7 +10454,7 @@ function bindHandlers() {
     });
   });
 
-  /* Signup form (STEP-102) */
+  /* Signup form (STEP-102) · consentimiento Habeas Data STEP-504 */
   safe('signup', function() {
     var f = $('signup-form');
     if (!f) return;
@@ -10021,6 +10465,11 @@ function bindHandlers() {
       var email = ($('signup-email') || {}).value.trim().toLowerCase();
       var p1    = ($('signup-pass')  || {}).value || '';
       var p2    = ($('signup-pass2') || {}).value || '';
+      var consent = ($('signup-consent') || {}).checked;
+      if (!consent) {
+        Toast.show('Debes aceptar la política de tratamiento de datos para crear una cuenta', 'error', 5000);
+        return;
+      }
       if (p1 !== p2) { Toast.show('Las contraseñas no coinciden', 'error'); return; }
       if (btn) { btn.disabled = true; var origTxt = btn.textContent; btn.textContent = 'Creando cuenta…'; }
       try {
@@ -10215,8 +10664,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.19.0', step: 'RSK-72-fix + Fase-4-incremental' });
-    console.log('%cEco-Complaint · v0.19.0 · audit cross-browser + métricas locales · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage') + ' · EmailJS ' + (EmailService.isConfigured() ? 'activo' : 'no-config'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.20.0', step: 'STEP-501..509 · Fase-5-hardening' });
+    console.log('%cEco-Complaint · v0.20.0 · Fase 5 (hardening · OWASP · Habeas Data · WCAG · security.txt)', 'color:#2EAA70;font-weight:600;font-size:13px');
     /* Métrica de boot: tiempo total del init */
     if (typeof Metrics !== 'undefined' && window.performance && performance.timing) {
       const navStart = performance.timing.navigationStart || (Date.now() - 1000);
@@ -10320,6 +10769,70 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.20.0 · STEP-501..509 · 2026-05-16 · Fase 5 · Hardening + compliance
+   Resumen · cierra fase con OWASP audit + Habeas Data Ley 1581 +
+   WCAG críticos + security.txt equivalente + ADRs 18-20.
+
+   STEP-501 · Audit OWASP + XSS mitigation
+   + Nuevo helper UI.escapeHtml(s) · escapa &<>"' para inyecciones
+     en innerHTML / atributos. ADR-18 documenta uso obligatorio.
+   + Aplicado a call-sites con user input:
+     - EvidenceView.renderGrid (ev.name, ev.description, ev.path)
+     - Admin drawer (reporter_description)
+     - Admin users table (u.name, u.email)
+     - Admin diagnóstico recent users
+     - UI.updateNav (session.name + role)
+   + Content-Security-Policy meta tag · default-src 'self', script-src
+     limitado a CDNs autorizados (unpkg, cdnjs, esm.sh, jsdelivr),
+     connect-src restringido a *.supabase.co + api.emailjs.com +
+     openstreetmap. frame-ancestors 'none' contra clickjacking.
+
+   STEP-504 · Habeas Data Ley 1581 de 2012
+   + docs/fase-5-habeas-data.sql · funciones SECURITY DEFINER:
+     - public.export_my_data() · derecho de acceso/portabilidad
+     - public.erase_my_data() · derecho al olvido (cancelación)
+     Ambas operan solo sobre auth.uid() · no se puede pasar otro uid
+     como argumento (garantía de seguridad estructural).
+   + Nueva vista /privacidad · política de tratamiento completa:
+     responsable, datos recolectados, finalidad, derechos ARCO,
+     retención, seguridad técnica, marco normativo. Si el usuario
+     está autenticado, muestra botones "Exportar mis datos" y
+     "Eliminar mi cuenta y mis denuncias" con doble confirmación.
+   + Consentimiento explícito en signUp · checkbox obligatorio
+     que enlaza a /privacidad. El handler rechaza el submit si
+     no está marcado.
+   + Audit log nuevos: habeas_data_export, habeas_data_erase.
+
+   STEP-505 · WCAG 2.1 AA críticos
+   + Skip-to-main link al inicio del body (WCAG 2.4.1 Bypass Blocks).
+     Posicionado off-screen hasta foco, brand-deep al recibir foco.
+   + Footer con role=contentinfo y nav aria-label.
+   + Footer-nav focus-visible explícito.
+   + Labels existentes en formularios preservados; aria-live en
+     toasts y guest-banner ya estaba.
+
+   STEP-508 · security.txt equivalente + responsible disclosure
+   + Nueva vista /seguridad · política de divulgación responsable:
+     canal de contacto, 7 días de SLA de respuesta, regla de los
+     90 días pre-disclosure, lista de medidas activas, limitaciones
+     conocidas declaradas honestamente.
+   + Bloque pre-formateado con campos equivalentes a RFC 9116
+     (Contact, Expires, Preferred-Languages, Canonical, Policy)
+     publicado dentro de la vista porque GitHub Pages estático no
+     permite servir /.well-known/security.txt directamente.
+
+   STEP-509 · Memoria técnica Fase 5 (docs/fase-5-memoria-tecnica.md)
+
+   Footer y links nuevos:
+   + Footer global con enlaces a /privacidad, /seguridad, /contacto
+   + Visible en todas las rutas · cumple WCAG 2.4.5 Multiple Ways
+
+   STEPs diferidos a acción del usuario (documentados):
+   + STEP-502 · hCaptcha · necesita cuenta gratuita
+   + STEP-503 · Rate limit server-side via Edge Function
+   + STEP-506 · Dependabot · activable desde GitHub Settings
+   + STEP-507 · Penetration test informal
+
    v0.19.0 · RSK-72-fix + Fase-4-incremental · 2026-05-15
    Cierra dos frentes en un solo PR:
 
