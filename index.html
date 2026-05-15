@@ -5933,11 +5933,23 @@ const Outbox = {
 const EmailService = {
   _ready: false,
 
-  /* True si el SDK cargó Y las credenciales están en config. */
+  /* True si el SDK cargó Y los 3 campos están llenos. El flag enabled
+     ya NO forma parte del gate de configuración: si llenaste los 3
+     campos, el sistema está configurado. enabled es un kill switch
+     SEPARADO (ver isPaused) que solo afecta el envío AUTOMÁTICO al
+     completar una denuncia · el admin siempre puede mandar manualmente
+     desde /admin/outbox aunque enabled sea false. */
   isConfigured() {
     if (typeof window.emailjs === 'undefined') return false;
     const cfg = ConfigRepo.getSync('emailjs', {}) || {};
-    return !!(cfg.service_id && cfg.template_id && cfg.public_key && cfg.enabled !== false);
+    return !!(cfg.service_id && cfg.template_id && cfg.public_key);
+  },
+
+  /* True si el admin pausó explícitamente el envío automático.
+     Default a no-pausado (undefined/null/true → false). */
+  isPaused() {
+    const cfg = ConfigRepo.getSync('emailjs', {}) || {};
+    return cfg.enabled === false;
   },
 
   /* Inicializa el SDK con la public_key. Idempotente. */
@@ -6102,11 +6114,10 @@ const Report = {
     emailsArray.forEach(function(email) {
       Outbox.enqueue(email, subject, body, radicado, Object.assign({}, meta, { to_name: 'Autoridad ambiental' }));
     });
-    /* Disparar processQueue inmediatamente (no bloquear el flujo de
-       redirect a /denunciar/enviado; el usuario verá el estado del
-       envío en /admin/outbox). Si EmailService no está configurado,
-       los items quedan 'pending' y el admin los procesa cuando configure. */
-    if (EmailService.isConfigured()) {
+    /* Disparar processQueue automáticamente solo si está configurado
+       Y no está pausado. Si está pausado, los items quedan pending y
+       el admin los procesa manualmente desde /admin/outbox. */
+    if (EmailService.isConfigured() && !EmailService.isPaused()) {
       Outbox.processQueue().then(function(r) {
         if (r.sent > 0) Toast.show('✓ ' + r.sent + ' notificación(es) enviada(s) a autoridades', 'ok', 3500);
         if (r.failed > 0) Toast.show('⚠ ' + r.failed + ' envío(s) fallaron · revisa /admin/outbox', 'error', 5000);
@@ -8341,10 +8352,12 @@ const Admin = {
           const ec = ConfigRepo.getSync('emailjs', {}) || {};
           const sdkLoaded = typeof window.emailjs !== 'undefined';
           const configured = EmailService.isConfigured();
+          const paused = EmailService.isPaused();
           const statusLabel = !sdkLoaded ? 'SDK no cargado'
             : !configured ? 'No configurado'
+            : paused ? 'Configurado · pausado'
             : 'Activo';
-          const statusCls = !sdkLoaded ? 'err' : (!configured ? 'warm' : 'ok');
+          const statusCls = !sdkLoaded ? 'err' : (!configured ? 'warm' : (paused ? 'warm' : 'ok'));
           return `
         <div class="dash-card" id="cfg-emailjs-card">
           <h4>Notificaciones por correo · EmailJS · Fase 3</h4>
@@ -8388,8 +8401,8 @@ const Admin = {
             </div>
             <div style="grid-column: 1 / -1">
               <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-soft); cursor: pointer">
-                <input type="checkbox" id="cfg-ej-enabled" ${ec.enabled !== false ? 'checked' : ''}>
-                <span><strong>Habilitar envío automático.</strong> Si desactivas, los correos se encolan pero no se mandan hasta que reactives.</span>
+                <input type="checkbox" id="cfg-ej-enabled" ${ec.enabled === false ? '' : 'checked'}>
+                <span><strong>Envío automático activo.</strong> Cuando una denuncia se envía, los correos se mandan inmediatamente. Si desmarcas, los correos quedan en cola y los procesas manualmente desde <a href="#/admin/outbox" style="color: var(--brand-deep); font-weight: 600">/admin/outbox</a>.</span>
               </label>
             </div>
           </div>
@@ -8479,11 +8492,14 @@ const Admin = {
       /* STEP-302 · Handlers EmailJS */
       const ejSaveBtn = document.getElementById('cfg-ej-save');
       if (ejSaveBtn) ejSaveBtn.onclick = async function() {
+        const enabledCb = document.getElementById('cfg-ej-enabled');
         const newCfg = {
           service_id:  (document.getElementById('cfg-ej-service') || {}).value.trim(),
           template_id: (document.getElementById('cfg-ej-template') || {}).value.trim(),
           public_key:  (document.getElementById('cfg-ej-pubkey') || {}).value.trim(),
-          enabled:     (document.getElementById('cfg-ej-enabled') || {}).checked !== false
+          /* enabled: true por defecto si el checkbox no existe o está marcado.
+             Solo false si el admin lo desmarcó explícitamente. */
+          enabled:     enabledCb ? !!enabledCb.checked : true
         };
         const result = document.getElementById('cfg-ej-result');
         ejSaveBtn.disabled = true;
