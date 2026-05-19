@@ -32,7 +32,10 @@
     https://unpkg.com
     https://cdnjs.cloudflare.com
     https://esm.sh
-    https://cdn.jsdelivr.net;
+    https://cdn.jsdelivr.net
+    https://js.hcaptcha.com
+    https://*.hcaptcha.com
+    https://newassets.hcaptcha.com;
   style-src 'self' 'unsafe-inline'
     https://fonts.googleapis.com
     https://unpkg.com;
@@ -49,7 +52,11 @@
     https://unpkg.com
     https://cdnjs.cloudflare.com
     https://esm.sh
-    https://cdn.jsdelivr.net;
+    https://cdn.jsdelivr.net
+    https://*.hcaptcha.com
+    https://newassets.hcaptcha.com;
+  frame-src https://*.hcaptcha.com https://newassets.hcaptcha.com;
+  style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.hcaptcha.com;
   base-uri 'self';
   form-action 'self';
 ">
@@ -1416,6 +1423,49 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 .dash-card h4 { font-size: var(--t-17); margin-bottom: var(--s-4); }
 
+/* Profile card · iteración 2 */
+.profile-card {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--r-xl); padding: var(--s-6);
+  display: flex; gap: var(--s-5); align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: var(--s-4);
+}
+.profile-avatar {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--brand-tint); color: var(--brand-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 32px; font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(46, 170, 112, 0.08);
+}
+.profile-info { flex: 1; min-width: 240px; }
+.profile-name-row {
+  display: flex; align-items: center; gap: var(--s-3);
+  flex-wrap: wrap; margin-bottom: var(--s-3);
+}
+.profile-name-row h2 { margin: 0; font-size: var(--t-26); color: var(--text); }
+.profile-edit-form {
+  display: flex; gap: var(--s-2); margin-bottom: var(--s-3);
+  flex-wrap: wrap;
+}
+.profile-edit-form.hidden { display: none; }
+.profile-edit-form .input { flex: 1; min-width: 200px; }
+.profile-meta {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: var(--text-soft);
+}
+.profile-meta strong { color: var(--text); }
+.profile-meta code { font-size: 12px; }
+.profile-actions {
+  display: flex; gap: var(--s-2); flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  .profile-card { padding: var(--s-4); gap: var(--s-3); }
+  .profile-avatar { width: 64px; height: 64px; font-size: 24px; }
+  .profile-name-row h2 { font-size: var(--t-22); }
+}
+
 /* Donut chart */
 .donut .donut-num { font-family: var(--font-display); font-size: 26px; font-weight: 700; fill: var(--text); }
 .donut .donut-lbl { font-family: var(--font-body); font-size: 11px; fill: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
@@ -2557,6 +2607,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
           <button class="btn btn-primary btn-lg" id="consulta-search-btn">Consultar</button>
         </div>
         <p class="muted" style="font-size: 12px; margin-top: 8px">Formato: <code>ECO-AAAAMMDD-{artículo}-{secuencia}</code></p>
+        <!-- Captcha · STEP-502 · visible solo si CaptchaService.isConfigured() -->
+        <div id="consulta-captcha" style="margin-top: 12px"></div>
       </div>
 
       <div id="consulta-result"></div>
@@ -2635,6 +2687,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
                 </span>
               </label>
             </div>
+            <!-- Captcha · STEP-502 · visible solo si CaptchaService.isConfigured() -->
+            <div id="signup-captcha" style="margin-top: 8px"></div>
             <div class="auth-actions">
               <button type="submit" class="btn btn-primary btn-lg" id="signup-submit">Crear cuenta</button>
               <button type="button" class="btn btn-ghost" data-auth-switch="login">Ya tengo cuenta</button>
@@ -2930,6 +2984,13 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   <section class="view" id="view-seguridad" data-route="/seguridad">
     <div class="container-narrow">
       <div id="seguridad-container"></div>
+    </div>
+  </section>
+
+  <!-- MI PERFIL · iteración 2 · datos del usuario + acciones ARCO -->
+  <section class="view" id="view-perfil" data-route="/mi-perfil">
+    <div class="container-narrow">
+      <div id="perfil-container"></div>
     </div>
   </section>
 
@@ -4842,7 +4903,8 @@ const Router = {
     { path: '/admin/diagnostico',    view: 'view-admin',          requires: 'admin', adminSub: 'diagnostico' },
     { path: '/admin/metricas',       view: 'view-admin',          requires: 'admin', adminSub: 'metricas' },
     { path: '/privacidad',           view: 'view-privacidad' },
-    { path: '/seguridad',            view: 'view-seguridad' }
+    { path: '/seguridad',            view: 'view-seguridad' },
+    { path: '/mi-perfil',            view: 'view-perfil',         requires: 'session' }
   ],
   init() { window.addEventListener('hashchange', () => this.resolve()); this.resolve(); },
   navigate(path) { window.location.hash = '#' + path; },
@@ -4895,11 +4957,12 @@ const Router = {
     if (route.view === 'view-evidence')       EvidenceView.render();
     if (route.view === 'view-review')         Review.render();
     if (route.view === 'view-sent')           SentView.render();
-    if (route.view === 'view-consulta')       PublicLookup.render();
+    if (route.view === 'view-consulta')       { PublicLookup.render(); UI.mountCaptchaIfNeeded('consulta-captcha'); }
     if (route.view === 'view-contacto')       Contact.render();
-    if (route.view === 'view-login')          UI.updateAuthBackendInfo();
+    if (route.view === 'view-login')          { UI.updateAuthBackendInfo(); UI.mountCaptchaIfNeeded('signup-captcha'); }
     if (route.view === 'view-privacidad')     Privacidad.render();
     if (route.view === 'view-seguridad')      Seguridad.render();
+    if (route.view === 'view-perfil')         Profile.render();
 
     Store.set({ route: hash });
     Audit.log('navigate', 'route', hash);
@@ -6411,6 +6474,59 @@ const EmailService = {
   }
 };
 
+/* === I.12c · CaptchaService · hCaptcha · STEP-502 iteración 2 ====
+   Lee credenciales desde ConfigRepo.get('hcaptcha') · NO hardcodeadas
+   (mismo patrón que EmailJS · ADR-16). Si no hay site_key, isConfigured
+   devuelve false y los formularios no piden captcha. Sin penalizar UX. */
+const CaptchaService = {
+  _widgets: {},
+
+  isLoaded() { return typeof window.hcaptcha !== 'undefined'; },
+
+  isConfigured() {
+    if (!this.isLoaded()) return false;
+    const cfg = ConfigRepo.getSync('hcaptcha', {}) || {};
+    return !!(cfg.site_key && cfg.enabled !== false);
+  },
+
+  render(containerId, options) {
+    options = options || {};
+    if (!this.isConfigured()) return null;
+    const el = document.getElementById(containerId);
+    if (!el) return null;
+    if (this._widgets[containerId] !== undefined) return this._widgets[containerId];
+    const cfg = ConfigRepo.getSync('hcaptcha', {}) || {};
+    try {
+      const widgetId = window.hcaptcha.render(containerId, {
+        sitekey: cfg.site_key,
+        theme: options.theme || 'light',
+        size: options.size || 'normal'
+      });
+      this._widgets[containerId] = widgetId;
+      return widgetId;
+    } catch (e) { console.warn('[CaptchaService.render]', e); return null; }
+  },
+
+  getToken(containerId) {
+    if (!this.isConfigured()) return null;
+    const widgetId = this._widgets[containerId];
+    if (widgetId === undefined) return null;
+    try { return window.hcaptcha.getResponse(widgetId) || null; }
+    catch (e) { return null; }
+  },
+
+  reset(containerId) {
+    const widgetId = this._widgets[containerId];
+    if (widgetId === undefined) return;
+    try { window.hcaptcha.reset(widgetId); } catch (e) {}
+  },
+
+  shouldBlock(containerId) {
+    if (!this.isConfigured()) return false;
+    return !this.getToken(containerId);
+  }
+};
+
 /* === I.13 · REPORT · generación de radicado y envío (STEP-004) === */
 const Report = {
   /* Rate limit local · defensa de UX, no de seguridad real.
@@ -7653,6 +7769,10 @@ const PublicLookup = {
       Toast.show('Ingresa un número de radicado válido', 'error');
       return;
     }
+    if (CaptchaService.shouldBlock('consulta-captcha')) {
+      Toast.show('Completa el captcha antes de consultar', 'error');
+      return;
+    }
     const resultEl = document.getElementById('consulta-result');
     if (!resultEl) return;
 
@@ -8308,6 +8428,178 @@ Policy: https://htc480.github.io/eco-complaint/#/seguridad</pre>
         <p>Investigadores que reporten vulnerabilidades válidas siguiendo esta política serán reconocidos públicamente (con su autorización) en esta página. Actualmente no contamos con un programa de recompensas monetarias (bug bounty); como proyecto académico, el reconocimiento es nuestro único agradecimiento formal.</p>
       </div>
     `;
+  }
+};
+
+/* === I.23 · PROFILE · vista de perfil del usuario · iteración 2 ===
+   Datos básicos del usuario logueado: nombre (editable inline),
+   email, rol, fecha de creación, conteo de denuncias. Acciones
+   primarias: editar nombre, link a /privacidad para derechos ARCO,
+   cerrar sesión.
+   Construido con concatenación de strings · evita templates literales
+   anidados que rompían el parser en iteración 1. */
+const Profile = {
+  render() {
+    const root = document.getElementById('perfil-container');
+    if (!root) return;
+    const session = Auth.current();
+    if (!session) {
+      Router.navigate('/iniciar-sesion');
+      return;
+    }
+    const inSupa = Backend.isSupabase();
+    const allReports = Persist.get('reports', []) || [];
+    const myReports = allReports.filter(function(r) { return r.user_id === session.uid; });
+    const anonReports = allReports.filter(function(r) { return r.is_anonymous && !r.user_id; });
+    const nameEsc = UI.escapeHtml(session.name || '—');
+    const emailEsc = UI.escapeHtml(session.email || '—');
+    const roleEsc = UI.escapeHtml(session.role || 'ciudadano');
+    const uidShort = UI.escapeHtml((session.uid || '').substring(0, 8));
+    const initials = (session.name || session.email || '?')
+      .split(/\s+/).map(function(s) { return s.charAt(0); }).slice(0, 2).join('').toUpperCase();
+    const initialsEsc = UI.escapeHtml(initials);
+    const verified = session.verified ? 'Sí · email confirmado' : 'Pendiente verificación';
+    const sinceFmt = session.since
+      ? new Date(session.since).toLocaleString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '—';
+
+    let html = '';
+    html += '<div class="page-head">';
+    html += '<span class="pill">Mi perfil</span>';
+    html += '<h1>Hola, ' + nameEsc + '</h1>';
+    html += '<p>Datos asociados a tu cuenta · puedes editarlos o ejercer tus derechos ARCO desde aquí.</p>';
+    html += '</div>';
+
+    /* Tarjeta superior · avatar + meta */
+    html += '<div class="profile-card">';
+    html += '<div class="profile-avatar">' + initialsEsc + '</div>';
+    html += '<div class="profile-info">';
+    html += '<div class="profile-name-row">';
+    html += '<h2 id="profile-name-display">' + nameEsc + '</h2>';
+    html += '<button class="btn btn-ghost btn-sm" id="profile-edit-name" type="button">✎ Editar nombre</button>';
+    html += '</div>';
+    html += '<div class="profile-edit-form hidden" id="profile-edit-form">';
+    html += '<input class="input" id="profile-name-input" value="' + nameEsc + '" maxlength="80">';
+    html += '<button class="btn btn-primary btn-sm" id="profile-save-name" type="button">💾 Guardar</button>';
+    html += '<button class="btn btn-ghost btn-sm" id="profile-cancel-name" type="button">Cancelar</button>';
+    html += '</div>';
+    html += '<div class="profile-meta">';
+    html += '<span><strong>Email:</strong> <code>' + emailEsc + '</code></span>';
+    html += '<span><strong>Rol:</strong> <span class="status-pill" data-status="' +
+      (session.role === 'admin' ? 'in_progress' : 'received') + '">' + roleEsc + '</span></span>';
+    html += '<span><strong>UID:</strong> <code class="mono" style="font-size:11px">' + uidShort + '…</code></span>';
+    html += '<span><strong>Verificación:</strong> ' + UI.escapeHtml(verified) + '</span>';
+    html += '<span><strong>Sesión iniciada:</strong> ' + UI.escapeHtml(sinceFmt) + '</span>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    /* KPIs · denuncias */
+    html += '<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-top: var(--s-5)">';
+    html += '<div class="kpi-card"><div class="kpi-value">' + myReports.length + '</div><div class="kpi-label">Mis denuncias</div></div>';
+    html += '<div class="kpi-card"><div class="kpi-value">' + anonReports.length + '</div><div class="kpi-label">Anónimas (en este navegador)</div></div>';
+    html += '<div class="kpi-card"><div class="kpi-value">' + (inSupa ? 'Supabase' : 'Local') + '</div><div class="kpi-label">Backend</div></div>';
+    html += '</div>';
+
+    /* Acciones principales */
+    html += '<div class="dash-card" style="margin-top: var(--s-5)">';
+    html += '<h4>Acciones rápidas</h4>';
+    html += '<div class="profile-actions">';
+    html += '<a class="btn btn-soft" href="#/mis-denuncias">📋 Ver mis denuncias</a>';
+    html += '<a class="btn btn-soft" href="#/denunciar">+ Nueva denuncia</a>';
+    if (session.role === 'admin') {
+      html += '<a class="btn btn-soft" href="#/admin">⚙ Panel admin</a>';
+    }
+    html += '<button class="btn btn-ghost" type="button" id="profile-logout-btn">🚪 Cerrar sesión</button>';
+    html += '</div>';
+    html += '</div>';
+
+    /* Privacidad · resumen + links */
+    html += '<div class="dash-card" style="margin-top: var(--s-5)">';
+    html += '<h4>Datos personales y privacidad · Ley 1581 de 2012</h4>';
+    html += '<p class="soft" style="font-size: 13px; margin-bottom: 12px">';
+    html += 'Tienes cuatro derechos sobre tus datos personales: acceso, rectificación, ';
+    html += 'cancelación (derecho al olvido) y oposición. Ejércelos desde la página de privacidad.';
+    html += '</p>';
+    html += '<div class="profile-actions">';
+    html += '<a class="btn btn-soft" href="#/privacidad">📄 Política de privacidad y derechos ARCO</a>';
+    html += '<a class="btn btn-ghost" href="#/seguridad">🔒 Política de seguridad</a>';
+    html += '</div>';
+    html += '</div>';
+
+    root.innerHTML = html;
+
+    /* Bind handlers */
+    Profile._bindEditName(root, session);
+    const logoutBtn = document.getElementById('profile-logout-btn');
+    if (logoutBtn) logoutBtn.onclick = function() {
+      Auth.logout().then(function() {
+        Toast.show('Sesión cerrada');
+        Router.navigate('/');
+      });
+    };
+  },
+
+  _bindEditName(root, session) {
+    const editBtn = document.getElementById('profile-edit-name');
+    const form = document.getElementById('profile-edit-form');
+    const nameDisplay = document.getElementById('profile-name-display');
+    const nameInput = document.getElementById('profile-name-input');
+    const saveBtn = document.getElementById('profile-save-name');
+    const cancelBtn = document.getElementById('profile-cancel-name');
+    if (!editBtn || !form || !nameInput || !saveBtn || !cancelBtn) return;
+
+    editBtn.onclick = function() {
+      form.classList.remove('hidden');
+      editBtn.classList.add('hidden');
+      nameInput.focus();
+      nameInput.select();
+    };
+    cancelBtn.onclick = function() {
+      form.classList.add('hidden');
+      editBtn.classList.remove('hidden');
+      nameInput.value = session.name || '';
+    };
+    saveBtn.onclick = async function() {
+      const newName = (nameInput.value || '').trim();
+      if (!newName || newName.length < 2) {
+        Toast.show('El nombre debe tener al menos 2 caracteres', 'error');
+        return;
+      }
+      if (newName === session.name) {
+        form.classList.add('hidden');
+        editBtn.classList.remove('hidden');
+        return;
+      }
+      saveBtn.disabled = true;
+      const origTxt = saveBtn.textContent;
+      saveBtn.textContent = '⏳ Guardando…';
+      try {
+        if (Backend.isSupabase()) {
+          const client = await Backend.client();
+          if (!client) throw new Error('Backend no disponible');
+          const result = await client.from('users_profile')
+            .update({ name: newName }).eq('uid', session.uid).select().maybeSingle();
+          if (result.error) throw new Error(result.error.message);
+        } else {
+          const users = Persist.get('users', []) || [];
+          const idx = users.findIndex(function(u) { return u.uid === session.uid; });
+          if (idx !== -1) { users[idx].name = newName; Persist.set('users', users); }
+        }
+        /* Actualizar Store + persistencia local de session */
+        const updated = Object.assign({}, session, { name: newName });
+        Store.set({ session: updated });
+        Persist.set('session', updated);
+        Audit.log('profile_name_update', 'session', session.uid, { from: session.name, to: newName });
+        Toast.show('Nombre actualizado');
+        UI.updateNav();
+        Profile.render();
+      } catch (err) {
+        Toast.show('No se pudo guardar: ' + (err.message || err), 'error');
+        saveBtn.disabled = false;
+        saveBtn.textContent = origTxt;
+      }
+    };
   }
 };
 
@@ -8986,6 +9278,51 @@ const Admin = {
       };
       const st = statusLabels[Backend.status()] || statusLabels.idle;
 
+      /* hCaptcha card · construido por concatenación (no template literal)
+         para evitar bug de parser con templates anidados. STEP-502 it.2 */
+      const hc = ConfigRepo.getSync('hcaptcha', {}) || {};
+      const hcSdkLoaded = CaptchaService.isLoaded();
+      const hcStatusLabel = !hcSdkLoaded ? 'SDK no cargado'
+        : !hc.site_key ? 'No configurado'
+        : (hc.enabled === false ? 'Configurado · pausado' : 'Activo');
+      const hcStatusCls = !hcSdkLoaded ? 'err'
+        : (!hc.site_key ? 'warm' : (hc.enabled === false ? 'warm' : 'ok'));
+      const hcSiteKeyEsc = UI.escapeHtml(hc.site_key || '');
+      const hcCheckedAttr = hc.enabled === false ? '' : 'checked';
+      let hcCardHtml = '';
+      hcCardHtml += '<div class="dash-card" id="cfg-hcaptcha-card">';
+      hcCardHtml += '<h4>Captcha anti-spam · hCaptcha · iteración 2</h4>';
+      hcCardHtml += '<p class="soft" style="font-size: 13px; margin-bottom: 16px">';
+      hcCardHtml += 'Si está activo, se exige captcha al <strong>crear cuenta</strong> y al ';
+      hcCardHtml += '<strong>consultar un radicado</strong>. Mitiga spam y abuso automatizado. ';
+      hcCardHtml += 'Es opcional · sin configurar, los formularios funcionan normal. ';
+      hcCardHtml += 'Cuenta gratuita en <a href="https://www.hcaptcha.com" target="_blank" rel="noopener" ';
+      hcCardHtml += 'style="color: var(--brand-deep); font-weight: 600">hcaptcha.com</a>.';
+      hcCardHtml += '</p>';
+      hcCardHtml += '<div class="backend-status-grid">';
+      hcCardHtml += '<div class="backend-status-cell"><div class="lbl">SDK</div>';
+      hcCardHtml += '<div class="val"><strong>' + (hcSdkLoaded ? '✓ Cargado' : '✗ No disponible') + '</strong></div></div>';
+      hcCardHtml += '<div class="backend-status-cell"><div class="lbl">Estado</div>';
+      hcCardHtml += '<div class="val"><span class="backend-status-pill" data-cls="' + hcStatusCls + '">' + hcStatusLabel + '</span></div></div>';
+      hcCardHtml += '<div class="backend-status-cell"><div class="lbl">Modo</div>';
+      hcCardHtml += '<div class="val mono">explicit</div></div>';
+      hcCardHtml += '</div>';
+      hcCardHtml += '<div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px">';
+      hcCardHtml += '<div><label class="label" for="cfg-hc-sitekey">Site Key</label>';
+      hcCardHtml += '<input class="input mono" id="cfg-hc-sitekey" placeholder="10000000-ffff-ffff-ffff-000000000001" value="' + hcSiteKeyEsc + '" autocomplete="off">';
+      hcCardHtml += '<p class="soft" style="font-size: 11px; margin-top: 4px">Es pública por diseño (similar a la anon key de Supabase). El secret_key vive en el dashboard de hCaptcha.</p>';
+      hcCardHtml += '</div>';
+      hcCardHtml += '<div><label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-soft); cursor: pointer">';
+      hcCardHtml += '<input type="checkbox" id="cfg-hc-enabled" ' + hcCheckedAttr + '>';
+      hcCardHtml += '<span><strong>Captcha activo.</strong> Si desmarcas, no se pide captcha aunque tengas site_key.</span>';
+      hcCardHtml += '</label></div>';
+      hcCardHtml += '</div>';
+      hcCardHtml += '<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px">';
+      hcCardHtml += '<button class="btn btn-primary btn-sm" id="cfg-hc-save">💾 Guardar hCaptcha</button>';
+      hcCardHtml += '<span id="cfg-hc-result" class="soft" style="font-size: 13px; align-self: center"></span>';
+      hcCardHtml += '</div>';
+      hcCardHtml += '</div>';
+
       root.innerHTML = `
         <div class="admin-content-head">
           <div><h2>Configuración</h2><p>Backend de datos, correos de autoridades por banda y datos públicos de contacto.</p></div>
@@ -9126,6 +9463,8 @@ const Admin = {
         </div>`;
         })()}
 
+        ${hcCardHtml}
+
         <div class="dash-card">
           <h4>Datos públicos de contacto</h4>
           <p class="soft" style="font-size: 13px; margin-bottom: 16px">Esta información aparece en la página pública de contacto (/contacto) para que cualquier visitante pueda comunicarse con la entidad operadora.</p>
@@ -9247,6 +9586,30 @@ const Admin = {
         } finally {
           ejTestBtn.disabled = false;
           ejTestBtn.textContent = origTxt;
+        }
+      };
+
+      /* Handler save hCaptcha · STEP-502 it.2 */
+      const hcSaveBtn = document.getElementById('cfg-hc-save');
+      if (hcSaveBtn) hcSaveBtn.onclick = async function() {
+        const newCfg = {
+          site_key: (document.getElementById('cfg-hc-sitekey') || {}).value.trim(),
+          enabled:  (document.getElementById('cfg-hc-enabled') || {}).checked !== false
+        };
+        const result = document.getElementById('cfg-hc-result');
+        hcSaveBtn.disabled = true;
+        const origTxt = hcSaveBtn.textContent;
+        hcSaveBtn.textContent = '⏳ Guardando…';
+        try {
+          await ConfigRepo.set('hcaptcha', newCfg);
+          if (result) result.innerHTML = '<span style="color: var(--brand-deep); font-weight: 600">✓ Guardado · recarga la app para aplicar</span>';
+          setTimeout(function() { Admin.config.render(root); }, 1500);
+        } catch (err) {
+          if (result) result.innerHTML = '<span style="color: var(--alarm)">✗ ' + UI.escapeHtml(err.message || String(err)) + '</span>';
+          Toast.show('No se pudo guardar hCaptcha', 'error');
+        } finally {
+          hcSaveBtn.disabled = false;
+          hcSaveBtn.textContent = origTxt;
         }
       };
 
@@ -10309,6 +10672,13 @@ const UI = {
     if (active) active.focus();
   },
 
+  /* Monta el widget hCaptcha si está configurado · iteración 2.
+     Idempotente: CaptchaService cachea el widget por contenedor. */
+  mountCaptchaIfNeeded(containerId) {
+    if (!CaptchaService.isConfigured()) return;
+    setTimeout(function() { CaptchaService.render(containerId); }, 50);
+  },
+
   /* Render del indicador de backend + bloque demo dinámico
      · pre-production audit · el bloque demo NO está en el HTML estático.
      Se inyecta vía JS solo en modo localStorage para no exponer
@@ -10521,6 +10891,10 @@ function bindHandlers() {
       var p1    = ($('signup-pass')  || {}).value || '';
       var p2    = ($('signup-pass2') || {}).value || '';
       var consent = ($('signup-consent') || {}).checked;
+      if (CaptchaService.shouldBlock('signup-captcha')) {
+        Toast.show('Completa el captcha antes de crear la cuenta', 'error');
+        return;
+      }
       if (!consent) {
         Toast.show('Debes aceptar la política de tratamiento de datos para crear una cuenta', 'error', 5000);
         return;
@@ -10647,7 +11021,7 @@ function bindHandlers() {
         var a = actionEl.dataset.action;
         if (a === 'logout')       { Auth.logout().then(function(){ Toast.show('Sesión cerrada'); Router.navigate('/'); }); }
         if (a === 'goto-mine')    { Router.navigate('/mis-denuncias'); }
-        if (a === 'goto-profile') { Router.navigate('/'); Toast.show('Perfil llega en una iteración futura · por ahora ejerce tus derechos ARCO desde el footer'); }
+        if (a === 'goto-profile') { Router.navigate('/mi-perfil'); }
         closeUserMenu();
       }
       if (e.target.closest && e.target.closest('.admin-link')) {
@@ -10722,8 +11096,8 @@ function init() {
     UI.updateNav();                diag('✓ UI.updateNav');
     UI.updateGuestBanner();        diag('✓ UI.updateGuestBanner');
     UI.updateLandingCTA();         diag('✓ UI.updateLandingCTA');
-    Audit.log('app_init', 'system', null, { version: '0.20.1', step: 'pre-production-audit' });
-    console.log('%cEco-Complaint · v0.20.1 · pre-production audit · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
+    Audit.log('app_init', 'system', null, { version: '0.21.0', step: 'iteration-2-profiles-hcaptcha' });
+    console.log('%cEco-Complaint · v0.21.0 · iteración 2 · perfiles + hCaptcha · backend ' + (Backend.isSupabase() ? 'supabase' : 'localStorage'), 'color:#2EAA70;font-weight:600;font-size:13px');
     /* Métrica de boot: tiempo total del init */
     if (typeof Metrics !== 'undefined' && window.performance && performance.timing) {
       const navStart = performance.timing.navigationStart || (Date.now() - 1000);
@@ -10830,6 +11204,56 @@ window.addEventListener('DOMContentLoaded', init);
 /* ============================================================
    CHANGELOG
    ============================================================
+   v0.21.0 · iteración 2 · 2026-05-18 · Perfiles + hCaptcha integrado
+
+   Cierra la deuda documentada en v0.20.1: vista de perfil real y
+   captcha activable desde admin. Lo que falló antes (templates
+   literales anidados rompiendo el parser) se evitó esta vez con
+   concatenación de strings + node --check después de cada edit.
+
+   Nueva vista /mi-perfil:
+   + Tarjeta de perfil con avatar de iniciales, nombre editable
+     inline, email/rol/uid/verificación/fecha de sesión
+   + KPIs: mis denuncias, anónimas en este navegador, backend activo
+   + Edición de nombre · async · actualiza users_profile (Supabase)
+     o eco.users (local) + Store + persist session + UI.updateNav
+     + audit log profile_name_update
+   + Acciones rápidas: mis denuncias, nueva denuncia, panel admin
+     (si rol=admin), cerrar sesión
+   + Sección "Datos personales y privacidad" con link a /privacidad
+     (donde están las acciones ARCO completas)
+   + Ruta /mi-perfil agregada al Router con requires: 'session'
+   + goto-profile del user-chip ahora navega a /mi-perfil (era
+     Toast placeholder en v0.20.1)
+   + CSS profile-card + profile-avatar + profile-meta responsivo
+
+   hCaptcha integrado (cierra STEP-502 deferido):
+   + SDK js.hcaptcha.com cargado async/defer
+   + CSP extendida para hCaptcha (script-src, connect-src,
+     frame-src, style-src-elem)
+   + Módulo CaptchaService: isLoaded, isConfigured, render,
+     getToken, reset, shouldBlock
+   + Patrón ADR-16 (no hardcoded): site_key en config.hcaptcha
+     editable desde /admin/config con flag enabled
+   + Sección hCaptcha en /admin/config construida con
+     concatenación de strings (no template literals anidados)
+     para evitar el bug de parser de v0.20.1
+   + Contenedores <div id="signup-captcha"> y "consulta-captcha"
+     · render automático en Router cuando se entra a la vista
+   + Validación shouldBlock en handlers de signUp y consulta
+     · si captcha está configurado y no resuelto, bloquea con
+     Toast claro
+   + Sin site_key configurada · degradación elegante (no se pide)
+
+   Lecciones aplicadas de v0.20.1 (auditoría pre-producción):
+   + Cada chunk de cambio se valida con node --check antes de seguir
+   + HTML complejo (cards, formularios) se construye con
+     concatenación de strings cuando el contexto exige > 2 niveles
+     de anidación de template literals
+   + Variables externalizadas (hcCardHtml) se interpolan con
+     ${var} simple · evita el bug del parser ES2022 con templates
+     anidados de tres niveles
+
    v0.20.1 · pre-production audit · 2026-05-16
    Limpieza visible para producción + STEPs diferidos en docs/SQL.
 
@@ -11572,6 +11996,16 @@ window.addEventListener('DOMContentLoaded', init);
   src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"
   onload="__reportLib('emailjs', true)"
   onerror="__reportLib('emailjs', false)"></script>
+<!-- hCaptcha SDK · STEP-502 · iteración 2.
+     Captcha invisible/visible para signUp y /consulta. Activo solo si
+     ConfigRepo.getSync('hcaptcha') tiene site_key y enabled !== false.
+     Sin site_key, CaptchaService.isConfigured devuelve false y los
+     formularios no piden captcha (degradación elegante). -->
+<script
+  src="https://js.hcaptcha.com/1/api.js?render=explicit"
+  onload="__reportLib('hcaptcha', true)"
+  onerror="__reportLib('hcaptcha', false)"
+  async defer></script>
 
 </body>
 </html>
